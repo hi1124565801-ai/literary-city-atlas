@@ -1537,6 +1537,12 @@ p {
   position: absolute;
   inset: 0;
   z-index: 0;
+  background:
+    linear-gradient(120deg, rgba(121, 82, 66, 0.035) 0 1px, transparent 1px 168px),
+    linear-gradient(0deg, rgba(88, 101, 86, 0.038) 0 1px, transparent 1px 104px),
+    radial-gradient(circle at 33% 38%, rgba(123, 64, 56, 0.055), transparent 27%),
+    radial-gradient(circle at 68% 56%, rgba(88, 101, 86, 0.052), transparent 31%),
+    #e6e0d6;
   cursor: grab;
   filter: saturate(0.36) sepia(0.2) contrast(0.91) brightness(1.04);
   touch-action: none;
@@ -3263,6 +3269,34 @@ body {
   opacity: 1;
 }
 
+.map-tile-status {
+  position: absolute;
+  z-index: 900;
+  top: 18px;
+  right: 18px;
+  max-width: min(340px, calc(100% - 36px));
+  border: 1px solid rgba(85, 64, 52, 0.18);
+  padding: 9px 12px;
+  background: rgba(251, 249, 244, 0.9);
+  color: var(--muted);
+  font-family: var(--serif-zh);
+  font-size: 12px;
+  line-height: 1.45;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-6px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.map-tile-status.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.map-stage.basemap-offline #map {
+  filter: none;
+}
+
 .mobile-map-bar,
 .mobile-bottom-nav,
 .mobile-sheet-summary {
@@ -4326,6 +4360,7 @@ body {
           </div>
           <div id="map"></div>
           <div class="map-wheel-hint" id="mapWheelHint" role="status">触控板双指平移 · 鼠标滚轮缩放</div>
+          <div class="map-tile-status" id="mapTileStatus" role="status" aria-live="polite"></div>
           <div class="map-panel">
             <div class="legend" aria-label="图例">
               <span><i class="marker-sample confirmed"></i><span>具体地点</span></span>
@@ -15351,6 +15386,9 @@ const text = {
   viewExternal: "在外部地图中查看",
   closeDetail: "关闭地点详情",
   fitAll: "显示全部地点",
+  basemapLoading: "底图正在加载",
+  basemapSwitched: "底图源已切换",
+  basemapOffline: "底图暂时没有加载出来，文学地点仍可继续浏览。",
   collapsePanel: "折叠地点面板",
   expandPanel: "展开地点面板",
   expandSheet: "展开地点面板",
@@ -15387,6 +15425,34 @@ const workThemes = {
   solitude: { accent: "#997144", deep: "#72512f", tint: "#f0e7d8", pattern: "river" }
 };
 
+const baseLayerProviders = [
+  {
+    name: "Carto Light",
+    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    options: {
+      subdomains: "abcd",
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+    }
+  },
+  {
+    name: "OpenStreetMap",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    options: {
+      maxZoom: 18,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }
+  },
+  {
+    name: "Esri Light Gray",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    options: {
+      maxZoom: 16,
+      attribution: "Tiles &copy; Esri"
+    }
+  }
+];
+
 let map;
 let data;
 let atlasPlaces = [];
@@ -15401,6 +15467,9 @@ let markers = new Map();
 let renderedLayers = [];
 let clusterFeatures = [];
 let coverMarkers = [];
+let baseLayer = null;
+let baseLayerIndex = 0;
+let baseLayerState = null;
 let selectedWork = "all";
 let selectedStory = "all";
 let activeStoryWorkId = null;
@@ -15446,6 +15515,7 @@ const workScrollLeft = document.querySelector("#workScrollLeft");
 const workScrollRight = document.querySelector("#workScrollRight");
 const mobileCurrentWork = document.querySelector("#mobileCurrentWork");
 const mapWheelHint = document.querySelector("#mapWheelHint");
+const mapTileStatus = document.querySelector("#mapTileStatus");
 const photoViewer = document.querySelector("#photoViewer");
 const photoViewerImage = document.querySelector("#photoViewerImage");
 const photoViewerCaption = document.querySelector("#photoViewerCaption");
@@ -15525,11 +15595,7 @@ function setupMap() {
 
   L.control.zoom({ position: "bottomright" }).addTo(map);
   setupMapWheelIsolation();
-
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 18,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-  }).addTo(map);
+  setupBaseLayerFallback();
 
   map.on("click", (event) => {
     if (event.originalEvent && event.originalEvent.defaultPrevented) return;
@@ -15569,6 +15635,92 @@ function updateMapViewportLimits() {
   map.setMinZoom(minimumWorldZoom);
   if (map.getZoom() < minimumWorldZoom) map.setZoom(minimumWorldZoom, { animate: false });
   map.panInsideBounds(verticalWorldBounds, { animate: false });
+}
+
+function setupBaseLayerFallback() {
+  baseLayerIndex = 0;
+  setMapTileStatus(text.basemapLoading);
+  mountBaseLayer(baseLayerIndex);
+}
+
+function mountBaseLayer(index) {
+  if (!map || !baseLayerProviders[index]) return;
+  if (baseLayer) {
+    baseLayer.off();
+    map.removeLayer(baseLayer);
+  }
+
+  const provider = baseLayerProviders[index];
+  baseLayerState = {
+    provider,
+    started: 0,
+    loaded: 0,
+    errors: 0,
+    settled: false,
+    fallbackTimer: null
+  };
+
+  baseLayer = L.tileLayer(provider.url, {
+    crossOrigin: true,
+    updateWhenIdle: true,
+    keepBuffer: 3,
+    ...provider.options
+  });
+
+  baseLayer.on("tileloadstart", () => {
+    if (!baseLayerState) return;
+    baseLayerState.started += 1;
+  });
+
+  baseLayer.on("tileload", () => {
+    if (!baseLayerState) return;
+    baseLayerState.loaded += 1;
+    baseLayerState.settled = true;
+    setMapTileStatus("");
+    document.querySelector(".map-stage")?.classList.remove("basemap-offline");
+  });
+
+  baseLayer.on("tileerror", () => {
+    if (!baseLayerState) return;
+    baseLayerState.errors += 1;
+    if (baseLayerState.errors >= 5 && baseLayerState.loaded === 0) switchBaseLayerOrFallback();
+  });
+
+  baseLayer.on("loading", () => setMapTileStatus(text.basemapLoading));
+  baseLayer.on("load", () => {
+    if (!baseLayerState) return;
+    baseLayerState.settled = true;
+    if (baseLayerState.loaded > 0) setMapTileStatus("");
+  });
+
+  baseLayerState.fallbackTimer = window.setTimeout(() => {
+    if (!baseLayerState || baseLayerState.loaded > 0) return;
+    switchBaseLayerOrFallback();
+  }, 4200);
+
+  baseLayer.addTo(map);
+}
+
+function switchBaseLayerOrFallback() {
+  if (!baseLayerState || baseLayerState.settled) return;
+  baseLayerState.settled = true;
+  window.clearTimeout(baseLayerState.fallbackTimer);
+
+  if (baseLayerIndex < baseLayerProviders.length - 1) {
+    baseLayerIndex += 1;
+    setMapTileStatus(text.basemapSwitched);
+    window.setTimeout(() => mountBaseLayer(baseLayerIndex), 280);
+    return;
+  }
+
+  setMapTileStatus(text.basemapOffline);
+  document.querySelector(".map-stage")?.classList.add("basemap-offline");
+}
+
+function setMapTileStatus(message) {
+  if (!mapTileStatus) return;
+  mapTileStatus.textContent = message;
+  mapTileStatus.classList.toggle("visible", Boolean(message));
 }
 
 function setupMapWheelIsolation() {
