@@ -261,8 +261,7 @@ const walkEntryCount = document.querySelector("#walkEntryCount");
 const mobileWalkCount = document.querySelector("#mobileWalkCount");
 const walkDrawer = document.querySelector("#walkDrawer");
 const walkPanelContent = document.querySelector("#walkPanelContent");
-const workScrollLeft = document.querySelector("#workScrollLeft");
-const workScrollRight = document.querySelector("#workScrollRight");
+const bookshelf = document.querySelector("#bookshelf");
 const mobileCurrentWork = document.querySelector("#mobileCurrentWork");
 const mapWheelHint = document.querySelector("#mapWheelHint");
 const mapTileStatus = document.querySelector("#mapTileStatus");
@@ -289,6 +288,7 @@ async function init() {
   setupControls();
   applyStaticText();
   renderBookCount();
+  buildBookshelf();
   render();
 }
 
@@ -566,9 +566,16 @@ function setupControls() {
   setupSheetHandle();
   setupDetailInteractions();
   setupModeControls();
-  setupWorkCarousel();
+  document.querySelector("#openShelf").addEventListener("click", openBookshelf);
+  document.querySelector("#closeShelf").addEventListener("click", () => bookshelf.close());
+  bookshelf.addEventListener("click", event => {
+    if (event.target !== bookshelf) return;
+    const rect = bookshelf.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) bookshelf.close();
+  });
   setupWalkDrawer();
   setupMobileNavigation();
+  bookshelf.addEventListener("close", syncMobileNav);
   setupPhotoViewer();
   changeScene.addEventListener("click", () => {
     invitationIndex++;
@@ -584,16 +591,17 @@ function setupControls() {
     if (!scene) return;
     selectedWork = scene.workId;
     render();
-    workTabs.querySelector(".active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
     selectScene(scene.id, { zoom: true, flash: true });
     const detail = window.matchMedia("(max-width: 767px)").matches ? sheetDetail : detailCard;
     detail.querySelector("[data-detail-close]")?.focus({ preventScroll: true });
   });
   searchInput.addEventListener("input", render);
   window.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && selectedPlaceId) {
-      clearSelectedPlace();
-    }
+    if (event.key !== "Escape" || bookshelf.open) return;
+    if (photoViewer.classList.contains("open")) setPhotoViewerOpen(false);
+    else if (walkDrawer.classList.contains("open")) setWalkOpen(false);
+    else if (aboutDrawer.classList.contains("open")) setAboutOpen(false);
+    else clearSelectedPlace();
   });
 }
 
@@ -633,15 +641,14 @@ function setupAboutDrawer() {
   aboutDrawer.querySelectorAll("[data-about-close]").forEach((element) => {
     element.addEventListener("click", () => setAboutOpen(false));
   });
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") setAboutOpen(false);
-  });
+
 }
 
 function setAboutOpen(open) {
   if (!aboutDrawer) return;
   aboutDrawer.classList.toggle("open", open);
   aboutDrawer.setAttribute("aria-hidden", String(!open));
+  syncMobileNav();
 }
 
 function setupSheetHandle() {
@@ -757,126 +764,33 @@ function updateSheetHandleLabel() {
   sheetHandle.setAttribute("aria-valuetext", sheetState);
 }
 
-function setupWorkCarousel() {
-  if (!workTabs) return;
-  const drag = {
-    pointerId: null,
-    startX: 0,
-    startY: 0,
-    startScrollLeft: 0,
-    moved: false,
-    captured: false
-  };
-  let suppressNextClick = false;
-  let suppressResetTimer = null;
-
-  workTabs.addEventListener("pointerdown", (event) => {
-    if (event.pointerType === "touch" || event.button !== 0) return;
-    drag.pointerId = event.pointerId;
-    drag.startX = event.clientX;
-    drag.startY = event.clientY;
-    drag.startScrollLeft = workTabs.scrollLeft;
-    drag.moved = false;
-    drag.captured = false;
-  });
-  workTabs.addEventListener("pointermove", (event) => {
-    if (drag.pointerId !== event.pointerId) return;
-    const deltaX = event.clientX - drag.startX;
-    const deltaY = event.clientY - drag.startY;
-    if (!drag.moved && Math.hypot(deltaX, deltaY) > 7 && Math.abs(deltaX) >= Math.abs(deltaY)) {
-      drag.moved = true;
-      workTabs.classList.add("is-dragging");
-      try {
-        workTabs.setPointerCapture(event.pointerId);
-        drag.captured = true;
-      } catch (_error) {
-        drag.captured = false;
-      }
-    }
-    if (!drag.moved) return;
-    event.preventDefault();
-    workTabs.scrollLeft = drag.startScrollLeft - deltaX;
-    updateWorkScrollButtons();
-  });
-
-  const resetDrag = () => {
-    const capturedPointerId = drag.pointerId;
-    const hadCapture = drag.captured;
-    drag.pointerId = null;
-    drag.moved = false;
-    drag.captured = false;
-    workTabs.classList.remove("is-dragging");
-    if (hadCapture && capturedPointerId !== null) {
-      try {
-        if (workTabs.hasPointerCapture(capturedPointerId)) workTabs.releasePointerCapture(capturedPointerId);
-      } catch (_error) {
-        // Capture may already have been released by the browser.
-      }
-    }
-  };
-  const endDrag = (event) => {
-    if (drag.pointerId !== event.pointerId) return;
-    const wasMoved = drag.moved;
-    resetDrag();
-    if (!wasMoved || event.type !== "pointerup") return;
-    suppressNextClick = true;
-    clearTimeout(suppressResetTimer);
-    suppressResetTimer = window.setTimeout(() => { suppressNextClick = false; }, 300);
-  };
-  workTabs.addEventListener("pointerup", endDrag);
-  workTabs.addEventListener("pointercancel", endDrag);
-  workTabs.addEventListener("lostpointercapture", resetDrag);
-  window.addEventListener("blur", resetDrag);
-  workTabs.addEventListener("click", (event) => {
-    if (!suppressNextClick) return;
-    event.preventDefault();
-    event.stopPropagation();
-    suppressNextClick = false;
-    clearTimeout(suppressResetTimer);
-  }, true);
-  workTabs.addEventListener("scroll", updateWorkScrollButtons, { passive: true });
-  workTabs.addEventListener("keydown", (event) => {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    event.preventDefault();
-    scrollWorks(event.key === "ArrowLeft" ? -1 : 1);
-  });
-  workScrollLeft?.addEventListener("click", () => scrollWorks(-1));
-  workScrollRight?.addEventListener("click", () => scrollWorks(1));
-  updateWorkScrollButtons();
+function openBookshelf() {
+  bookshelf.showModal();
+  syncMobileNav();
+  workTabs.querySelector('[aria-pressed="true"]')?.focus({ preventScroll: true });
 }
 
-function scrollWorks(direction) {
-  if (!workTabs) return;
-  const card = workTabs.querySelector(".work-button");
-  const distance = card ? card.getBoundingClientRect().width * 1.75 : 260;
-  workTabs.scrollBy({ left: direction * distance, behavior: "smooth" });
-}
-
-function updateWorkScrollButtons() {
-  if (!workTabs) return;
-  const max = Math.max(0, workTabs.scrollWidth - workTabs.clientWidth);
-  if (workScrollLeft) workScrollLeft.disabled = workTabs.scrollLeft <= 28;
-  if (workScrollRight) workScrollRight.disabled = workTabs.scrollLeft >= max - 2;
+function syncMobileNav() {
+  const current = bookshelf.open ? "works" : walkDrawer.classList.contains("open") ? "walk" : aboutDrawer.classList.contains("open") ? "about" : "map";
+  document.querySelectorAll("[data-mobile-view]").forEach(button => {
+    const active = button.dataset.mobileView === current;
+    button.classList.toggle("active", active);
+    if (active) button.setAttribute("aria-current", "true");
+    else button.removeAttribute("aria-current");
+  });
 }
 
 function setupMobileNavigation() {
-  document.querySelectorAll("[data-mobile-view]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const view = button.dataset.mobileView;
-      document.querySelectorAll("[data-mobile-view]").forEach((item) => item.classList.toggle("active", item === button));
-      if (view === "map") setSheetState("collapsed");
-      if (view === "works") {
-        setSheetState("expanded");
-        requestAnimationFrame(() => workTabs?.scrollIntoView({ block: "nearest" }));
-      }
-      if (view === "walk") setWalkOpen(true);
-      if (view === "about") setAboutOpen(true);
-    });
-  });
-  document.querySelector("#mobileWorkButton")?.addEventListener("click", () => setSheetState("expanded"));
-  document.querySelector("#mobileSearchButton")?.addEventListener("click", () => {
+  syncMobileNav();
+  document.querySelector('[data-mobile-view="works"]').addEventListener("click", openBookshelf);
+  document.querySelector("#mobileWorkButton").addEventListener("click", openBookshelf);
+  document.querySelector('[data-mobile-view="map"]').addEventListener("click", () => setSheetState("collapsed"));
+  document.querySelector('[data-mobile-view="walk"]').addEventListener("click", () => setWalkOpen(true));
+  document.querySelector('[data-mobile-view="about"]').addEventListener("click", () => setAboutOpen(true));
+  document.querySelector("#mobileSearchButton").addEventListener("click", () => {
+    clearSelectedPlace();
     setSheetState("expanded");
-    requestAnimationFrame(() => searchInput?.focus());
+    requestAnimationFrame(() => searchInput.focus());
   });
 }
 
@@ -1031,39 +945,26 @@ function renderBookCount() {
   if (bookCount) bookCount.innerHTML = `<strong>${featuredCount}</strong> 个精选场景 <span>${escapeHtml(workText)} · ${atlasPlaces.length} 个文学地点</span>`;
 }
 
-function renderWorkTabs() {
-  workTabs.innerHTML = "";
+function buildBookshelf() {
   const works = data.works || [{ id: "all", title: "全部作品" }];
   works.forEach((work) => {
-    const placeCount = work.id === "all"
-      ? atlasPlaces.length
-      : atlasPlaces.filter((place) => place.works.some((entry) => entry.workId === work.id)).length;
-    const sceneCount = work.id === "all"
-      ? literaryScenes.filter((scene) => scene.featured).length
-      : literaryScenes.filter((scene) => scene.featured && scene.workId === work.id).length;
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `work-button ${selectedWork === work.id ? "active" : ""}`;
+    button.className = "shelf-book";
     button.dataset.work = work.id;
-    button.setAttribute("aria-pressed", String(selectedWork === work.id));
     const theme = themeForWork(work.id);
     button.style.setProperty("--work-accent", theme.accent);
     button.style.setProperty("--work-tint", theme.tint);
     const cover = work.id === "all"
-      ? `<span class="atlas-cover" aria-hidden="true">⌖</span>`
-      : `<img src="${escapeAttr(work.cover || "")}" alt="${escapeAttr(workTitle(work.id))} 封面" loading="lazy" draggable="false" />`;
-    const collectionCount = Array.isArray(work.stories) ? work.stories.length : 0;
-    const countText = collectionCount
-      ? `${work.collectionCountLabel || `${collectionCount} 篇`} · ${sceneCount} 幕 · ${placeCount} 地点`
-      : `${sceneCount} 幕精选 · ${placeCount} 个地点`;
-    button.innerHTML = `
-      <span class="work-cover">${cover}</span>
-      <strong class="work-title">${escapeHtml(work.id === "all" ? text.allWorks : workTitle(work.id))}</strong>
-      <span class="work-author">${escapeHtml(work.id === "all" ? text.allWorksAuthor : work.author || "")}</span>
-      <span class="work-city">${escapeHtml(work.id === "all" ? text.allWorksCity : workCities[work.id] || "")}</span>
-      <span class="work-count">${escapeHtml(countText)}</span>
-    `;
+      ? ""
+      : `<img src="${escapeAttr(work.cover)}" alt="" width="52" height="70" loading="lazy" />`;
+    button.innerHTML = `${cover}<span><strong>${escapeHtml(workTitle(work.id))}</strong>
+      ${work.author ? `<small>${escapeHtml(work.author)}</small>` : ""}
+      ${workCities[work.id] ? `<small>${escapeHtml(workCities[work.id])}</small>` : ""}
+      </span>`;
     button.addEventListener("click", () => {
+      bookshelf.close();
+      searchInput.value = "";
       invitationIndex = 0;
       selectedWork = work.id;
       selectedPlaceId = null;
@@ -1071,13 +972,23 @@ function renderWorkTabs() {
       selectedStory = "all";
       activeStoryWorkId = work.id === "all" ? null : work.id;
       activeStoryTitle = null;
+      if (window.matchMedia("(max-width: 767px)").matches) setSheetState("half");
       render();
       fitAllVisible();
     });
     workTabs.appendChild(button);
   });
-  if (mobileCurrentWork) mobileCurrentWork.textContent = selectedWork === "all" ? text.allWorks : workTitle(selectedWork);
-  requestAnimationFrame(updateWorkScrollButtons);
+}
+
+function renderWorkTabs() {
+  for (const button of workTabs.children) {
+    button.setAttribute("aria-pressed", String(button.dataset.work === selectedWork));
+  }
+  const works = data.works;
+  mobileCurrentWork.textContent = selectedWork === "all" ? text.allWorks : workTitle(selectedWork);
+  document.querySelector("#shelfSelection").textContent = mobileCurrentWork.textContent;
+  const covers = selectedWork === "all" ? works.filter(work => work.cover).slice(0, 3) : [workById(selectedWork)];
+  document.querySelector("#shelfSample").innerHTML = covers.map(work => `<img src="${escapeAttr(work.cover)}" alt="" />`).join("");
 }
 
 function themeForWork(workId) {
@@ -1273,7 +1184,8 @@ function markerIcon(place) {
     className: classes,
     iconSize: [32, 32],
     iconAnchor: [16, 16],
-    html: `<span class="pin">${escapeHtml(routeOrder ? String(routeOrder) : count > 1 ? String(count) : "")}</span>`
+    html: `<span class="pin">${escapeHtml(routeOrder ? String(routeOrder) : count > 1 ? String(count) : "")}</span>
+      ${selectedPlaceId === place.id ? `<span class="reading-place-label">${escapeHtml(place.name)}</span>` : ""}`
   });
 }
 
@@ -1452,6 +1364,7 @@ function focusSelectedPlace(place, options = {}) {
     map.panTo(readingMapCenter(place, map.getZoom()), { animate: true });
   }
   renderDetail(place);
+  renderMobileSheetSummary();
   renderRouteStatus();
   updateMarkerVisuals();
   if (options.flash) flashPlaceMarker(place.id);
@@ -1485,6 +1398,7 @@ function clearSelectedPlace() {
   activeStoryTitle = selectedStory === "all" ? null : selectedStory;
   document.querySelectorAll(".place-card.active").forEach((card) => card.classList.remove("active"));
   renderDetail(null);
+  renderMobileSheetSummary();
   renderRouteStatus();
   renderMapLayers();
 }
@@ -1579,10 +1493,20 @@ function renderDetail(place) {
       });
     });
     target.querySelectorAll("[data-scene-nav]").forEach((button) => {
-      button.addEventListener("click", () => moveScene(button.dataset.sceneNav));
+      button.addEventListener("click", () => {
+        const direction = button.dataset.sceneNav;
+        moveScene(direction);
+        const nextFocus = target.querySelector(`[data-scene-nav="${direction}"]:enabled`) || target.querySelector("[data-scene-nav]:enabled");
+        nextFocus?.focus({ preventScroll: true });
+      });
     });
     target.querySelectorAll("[data-route-toggle]").forEach((button) => {
-      button.addEventListener("click", () => toggleRouteStop(button.dataset.placeId, button.dataset.sceneId));
+      button.addEventListener("click", () => {
+        const scroll = target.querySelector(".place-detail-content").scrollTop;
+        toggleRouteStop(button.dataset.placeId, button.dataset.sceneId);
+        target.querySelector(".place-detail-content").scrollTop = scroll;
+        target.querySelector("[data-route-toggle]").focus({ preventScroll: true });
+      });
     });
     target.querySelectorAll("[data-open-walk]").forEach((button) => {
       button.addEventListener("click", () => setWalkOpen(true));
@@ -1626,10 +1550,9 @@ function detailHtml(place) {
       <div class="place-detail-content">
         ${scene ? sceneDetailHtml(scene, place) : placeWithoutSceneHtml(place)}
         ${scenes.length > 1 ? sceneSwitcherHtml(scenes) : ""}
-        ${selectedScopeMode === "featured" ? storyNavigationHtml(storyState) : ""}
         <div class="walk-actions">
           ${navigationButtonHtml(place)}
-          <button type="button" data-route-toggle data-place-id="${escapeAttr(place.id)}" data-scene-id="${escapeAttr(scene ? scene.id : "")}">
+          <button type="button" data-route-toggle aria-pressed="${routeAdded}" data-place-id="${escapeAttr(place.id)}" data-scene-id="${escapeAttr(scene ? scene.id : "")}">
             ${escapeHtml(routeAdded ? "已加入漫游" : text.addToRoute)}
           </button>
           ${routeAdded ? `<button type="button" class="view-walk" data-open-walk>查看我的漫游</button>` : ""}
@@ -1642,6 +1565,7 @@ function detailHtml(place) {
           <a href="${mapsUrl(place)}" target="_blank" rel="noreferrer">${escapeHtml(text.viewExternal)}</a>
         </div>
       </div>
+      ${storyState ? storyNavigationHtml(storyState) : ""}
     </div>
   `;
 }
@@ -1949,27 +1873,18 @@ function setActiveStoryScope(scene) {
 }
 
 function storyNavigationHtml(storyState) {
-  if (!storyState) {
-    return `<p class="story-empty">${escapeHtml(text.storyIdle)}</p>`;
-  }
   const { sequence, index } = storyState;
-  if (!sequence.length || index < 0) {
-    return `<p class="story-empty">${escapeHtml(text.notInStory)}</p>`;
-  }
-  const previousDisabled = index <= 0;
-  const nextDisabled = index >= sequence.length - 1;
-  const boundary = previousDisabled
-    ? text.firstScene
-    : nextDisabled
-      ? text.lastScene
-      : "";
-  return `
-    <div class="reading-actions">
-      <button type="button" data-scene-nav="previous" ${previousDisabled ? "disabled" : ""}>${escapeHtml(text.previousScene)}</button>
-      <button type="button" data-scene-nav="next" ${nextDisabled ? "disabled" : ""}>${escapeHtml(text.nextScene)}</button>
-    </div>
-    ${boundary ? `<p class="story-boundary">${escapeHtml(boundary)}</p>` : ""}
-  `;
+  if (index < 0 || sequence.length < 2) return "";
+  const previous = sequence[index - 1];
+  const next = sequence[index + 1];
+  return `<nav class="scene-pager" aria-label="按故事顺序翻阅">
+    <button type="button" data-scene-nav="previous" ${previous ? "" : "disabled"}>← 上一幕</button>
+    <button type="button" data-scene-nav="next" ${next ? "" : "disabled"}>
+      <small>${next ? "下一幕 →" : "已读到最后一幕"}</small>
+      ${next ? `<strong>${escapeHtml(next.sceneTitle)}</strong>` : ""}
+    </button>
+  </nav>`;
+
 }
 
 function routeStopOrder(placeId) {
@@ -2000,7 +1915,7 @@ function toggleRouteStop(placeId, sceneId = "") {
       addedAt: new Date().toISOString(),
       status: myRouteStops.length ? "unvisited" : "current"
     });
-    showToast(text.routeAdded, "查看路线", () => setWalkOpen(true));
+    showToast(`已加入我的漫游 · 第 ${myRouteStops.length} 站`, "查看路线", () => setWalkOpen(true));
   }
   myWalk.updatedAt = new Date().toISOString();
   saveMyWalk();
@@ -2045,12 +1960,7 @@ function setupWalkDrawer() {
   walkDrawer.querySelectorAll("[data-walk-close]").forEach((element) => {
     element.addEventListener("click", () => setWalkOpen(false));
   });
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      setWalkOpen(false);
-      setPhotoViewerOpen(false);
-    }
-  });
+
 }
 
 function setWalkOpen(open) {
@@ -2058,6 +1968,7 @@ function setWalkOpen(open) {
   if (open) renderWalkSummary();
   walkDrawer.classList.toggle("open", open);
   walkDrawer.setAttribute("aria-hidden", String(!open));
+  syncMobileNav();
 }
 
 function renderWalkSummary() {
@@ -2117,10 +2028,10 @@ function walkStopHtml(stop, index) {
     <li class="walk-stop" data-walk-stop-id="${escapeAttr(stop.id)}" draggable="true">
       <button type="button" class="walk-drag-handle" aria-label="拖动调整${escapeAttr(place.name)}的顺序" title="拖动排序"><span aria-hidden="true">⋮⋮</span></button>
       <span class="walk-stop-number">${index + 1}</span>
-      <div class="walk-stop-copy">
+      <button class="walk-stop-copy stop-link" type="button" data-show-stop aria-label="在地图上查看${escapeAttr(place.name)}">
         <strong>${escapeHtml(place.name)}</strong>
         <span>${escapeHtml(place.city)}${scene ? ` · ${escapeHtml(workTitle(scene.workId))}` : ""}</span>
-      </div>
+      </button>
       <div class="walk-stop-actions">
         <button type="button" data-stop-move="up" aria-label="上移${escapeAttr(place.name)}" ${index === 0 ? "disabled" : ""}>↑</button>
         <button type="button" data-stop-move="down" aria-label="下移${escapeAttr(place.name)}" ${index === myRouteStops.length - 1 ? "disabled" : ""}>↓</button>
@@ -2147,6 +2058,7 @@ function bindWalkPanelInteractions() {
       event.preventDefault();
       reorderWalkStop(event.dataTransfer.getData("text/plain"), stopId);
     });
+    item.querySelector("[data-show-stop]").addEventListener("click", () => openWalkStop(myRouteStops.find(stop => stop.id === stopId)));
     item.querySelector("[data-stop-remove]")?.addEventListener("click", () => removeWalkStop(stopId));
     item.querySelectorAll("[data-stop-move]").forEach((button) => {
       button.addEventListener("click", () => moveWalkStop(stopId, button.dataset.stopMove === "up" ? -1 : 1));
@@ -2269,9 +2181,26 @@ function startMyWalk() {
   if (!first) return;
   myRouteStops.forEach((stop, index) => { stop.status = index === 0 ? "current" : "unvisited"; });
   saveMyWalk();
+  openWalkStop(first);
+}
+
+function openWalkStop(stop) {
+  const place = stop && placeById(stop.placeId);
+  if (!place) return;
+  const scene = sceneById(stop.sceneId);
+  selectedWork = scene?.workId || stop.workId || "all";
+  selectedStory = "all";
+  selectedScopeMode = scene?.featured ? "featured" : "all";
+  searchInput.value = "";
+  selectedPlaceId = place.id;
+  selectedSceneId = scene?.id || null;
+  activeStoryWorkId = scene?.workId || null;
+  activeStoryTitle = null;
   setWalkOpen(false);
-  activatePlace(first.placeId, { sceneId: first.sceneId });
-  if (window.matchMedia("(max-width: 767px)").matches) setSheetState("half");
+  render();
+  focusSelectedPlace(place, { zoom: true, flash: true });
+  const detail = window.matchMedia("(max-width: 767px)").matches ? sheetDetail : detailCard;
+  detail.querySelector("[data-detail-close]")?.focus({ preventScroll: true });
 }
 
 function navigationButtonHtml(place) {

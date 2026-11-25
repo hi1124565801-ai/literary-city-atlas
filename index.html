@@ -4303,7 +4303,51 @@ body {
   .scene-ticket { padding: 4px 10px; }
   .scene-ticket strong { font-size: 16px; }
   .invitation-top button { min-height: 30px; }
-  .panel-inner:has(.scene-invitation[hidden]) .work-carousel-shell { margin-top: 30px; }
+}
+.shelf-entry { width: 100%; flex: none; display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 7px 22px; border: 0; border-bottom: 1px solid var(--line); background: var(--paper-light); color: var(--ink); text-align: left; cursor: pointer; }
+.shelf-entry strong { flex: 1; font: 600 14px/1.4 var(--serif-zh); }
+.shelf-entry > span:last-child { color: var(--accent-dark); font: 600 12px/1.4 var(--sans); white-space: nowrap; }
+.shelf-sample { display: flex; align-items: center; padding-right: 2px; }
+.shelf-sample img { display: block; width: 23px; height: 33px; object-fit: contain; filter: drop-shadow(1px 1px 1px #39251235); }
+.shelf-sample img + img { margin-left: -11px; }
+.book-dialog { box-sizing: border-box; width: min(640px, calc(100% - 24px)); max-height: min(86dvh, 730px); margin: auto; padding: 0 20px 18px; overflow: auto; overscroll-behavior: contain; background: var(--paper-light); color: var(--ink); border: 1px solid var(--line); border-top: 3px solid var(--accent); border-radius: 7px; box-shadow: 0 16px 60px #281c1930; }
+.book-dialog::backdrop { background: #27211c70; }
+.book-dialog header { position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: center; padding: 10px 0; background: var(--paper-light); }
+.book-dialog h2 { margin: 0; font: 600 20px/1.4 var(--serif-zh); }
+.book-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.shelf-book { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 10px; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 3px; cursor: pointer; text-align: left; }
+.shelf-book:hover, .shelf-book[aria-pressed=true] { background: var(--work-tint); border-color: var(--work-accent); }
+.shelf-book[aria-pressed=true] { box-shadow: inset 3px 0 var(--work-accent); }
+.shelf-book img { width: 45px; height: 66px; object-fit: contain; }
+.shelf-book strong, .shelf-book small { display: block; overflow-wrap: anywhere; }
+.shelf-book strong { font: 600 15px/1.4 var(--serif-zh); }
+.shelf-book small { margin-top: 2px; color: var(--muted); font: 12px/1.4 var(--sans); }
+.shelf-book[data-work=all] { grid-column: 1/-1; order: 1; justify-content: center; min-height: 42px; }
+.scene-pager { flex: none; display: grid; grid-template-columns: auto minmax(0,1fr); border-top: 1px solid var(--line); background: var(--paper-light); }
+.scene-pager button { min-height: 48px; padding: 5px 14px; border: 0; color: var(--accent-dark); background: transparent; cursor: pointer; font: 13px/1.4 var(--sans); }
+.scene-pager button:last-child { text-align: right; background: color-mix(in srgb, var(--work-tint) 62%, var(--paper-light)); }
+.scene-pager button:disabled { color: var(--muted); opacity: .65; cursor: default; }
+.scene-pager small, .scene-pager strong { display: block; }
+.scene-pager strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 14px/1.4 var(--serif-zh); }
+.atlas-marker .reading-place-label { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); width: max-content; max-width: min(230px,60vw); pointer-events: none; white-space: normal; padding: 3px 8px; background: var(--paper-light); color: var(--ink); font: 600 13px/1.4 var(--serif-zh); border: 1px solid var(--accent); border-radius: 3px; }
+.walk-actions [data-route-toggle][aria-pressed=true] { background: var(--work-tint); border-color: var(--accent-dark); }
+.stop-link { text-align: left; border: 0; padding: 4px 0; background: transparent; color: var(--ink); cursor: pointer; }
+.stop-link strong { text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.stop-link:hover strong { text-decoration-color: var(--accent-dark); }
+.shelf-book:focus-visible, .shelf-entry:focus-visible, .scene-pager button:focus-visible, .stop-link:focus-visible { outline: 2px solid var(--accent-dark); outline-offset: -3px; }
+@media (max-width: 767px) {
+  .shelf-entry { min-height: 46px; padding: 6px 18px; }
+  .panel-inner:has(.scene-invitation[hidden]) .shelf-entry { margin-top: 30px; }
+  .book-dialog { padding-inline: 12px; }
+  .book-grid { gap: 6px; }
+  .shelf-book { gap: 7px; padding: 7px; }
+  .shelf-book img { width: 33px; height: 54px; }
+  .shelf-book small { font-size: 11px; }
+  .sheet-detail .place-detail-panel { height: 100%; }
+  .sheet-detail .place-detail-content { flex: 1; }
+}
+@media (max-width: 355px) {
+  .book-grid { grid-template-columns: 1fr; }
 }
 </style>
   </head>
@@ -4360,15 +4404,10 @@ body {
               </button>
             </section>
 
-            <div class="work-carousel-shell">
-              <button class="work-scroll work-scroll-left" id="workScrollLeft" type="button" aria-label="向左浏览作品" disabled>
-                <span aria-hidden="true">‹</span>
-              </button>
-              <div class="work-strip work-carousel" id="workTabs" aria-label="书籍选择" tabindex="0"></div>
-              <button class="work-scroll work-scroll-right" id="workScrollRight" type="button" aria-label="向右浏览作品">
-                <span aria-hidden="true">›</span>
-              </button>
-            </div>
+            <button type="button" class="shelf-entry" id="openShelf" aria-haspopup="dialog" aria-controls="bookshelf">
+              <span class="shelf-sample" id="shelfSample" aria-hidden="true"></span>
+              <strong id="shelfSelection">全部作品</strong><span>浏览书架 →</span>
+            </button>
             <div class="story-strip" id="storyTabs" aria-label="小说集篇目选择" hidden></div>
 
             <div class="controls">
@@ -4390,7 +4429,7 @@ body {
 
         <section class="map-stage" aria-label="文学地图">
           <div class="mobile-map-bar" aria-label="移动端地图工具">
-            <button id="mobileWorkButton" type="button" aria-label="选择作品">
+            <button id="mobileWorkButton" aria-haspopup="dialog" type="button" aria-label="选择作品">
               <span>当前作品</span>
               <strong id="mobileCurrentWork">全部作品</strong>
             </button>
@@ -4416,11 +4455,16 @@ body {
 
     <nav class="mobile-bottom-nav" aria-label="主要功能">
       <button type="button" data-mobile-view="map" class="active"><span aria-hidden="true">⌖</span><strong>地图</strong></button>
-      <button type="button" data-mobile-view="works"><span aria-hidden="true">▥</span><strong>作品</strong></button>
+      <button type="button" data-mobile-view="works" aria-haspopup="dialog"><span aria-hidden="true">▥</span><strong>书架</strong></button>
       <button type="button" data-mobile-view="walk"><span aria-hidden="true">↝</span><strong>我的漫游</strong><em id="mobileWalkCount">0</em></button>
       <button type="button" data-mobile-view="about"><span aria-hidden="true">i</span><strong>关于</strong></button>
     </nav>
     </div>
+
+    <dialog id="bookshelf" class="book-dialog" aria-labelledby="shelfTitle">
+      <header><h2 id="shelfTitle">选择作品</h2><button type="button" class="drawer-close" id="closeShelf" aria-label="关闭书架">×</button></header>
+      <div id="workTabs" class="book-grid"></div>
+    </dialog>
 
     <aside class="about-drawer" id="aboutDrawer" aria-label="关于" aria-hidden="true">
       <div class="about-backdrop" data-about-close></div>
