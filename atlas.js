@@ -205,7 +205,6 @@ let atlasPlaces = [];
 let unmappedPlaces = [];
 let visiblePlaces = [];
 let literaryScenes = [];
-let rawPlaceIdToPlaceId = new Map();
 let selectedScopeMode = "featured";
 let myRouteStops = [];
 let myWalk = null;
@@ -342,7 +341,7 @@ function setupMap() {
     wheelPxPerZoomLevel: 84
   });
   const opening = placeById(sceneById(openingScenes[0])?.placeId);
-  if (opening) map.setView(readingMapCenter(opening, 14), 14);
+  if (opening) map.setView(latLng(opening), 14);
   else map.fitWorld();
   window.__literaryMap = map;
 
@@ -365,7 +364,6 @@ function setupMap() {
     clearSelectedPlace();
   });
 
-  map.on("zoomend", renderMapLayers);
   map.on("moveend", () => {
     if (!mapWheelPanActive) renderMapLayers();
   });
@@ -583,7 +581,7 @@ function setupControls() {
     const place = placeById(sceneById(startScene.dataset.scene)?.placeId);
     if (place && !selectedPlaceId) {
       const zoom = zoomFor(place);
-      map.setView(readingMapCenter(place, zoom), zoom);
+      map.setView(latLng(place), zoom);
     }
   });
   startScene.addEventListener("click", () => {
@@ -709,7 +707,7 @@ function setSheetState(nextState) {
   shell.classList.toggle("sheet-half", sheetState === "half");
   shell.classList.toggle("sheet-expanded", sheetState === "expanded");
   updateSheetHandleLabel();
-  requestAnimationFrame(() => map && map.invalidateSize());
+  if (map) map.invalidateSize();
 }
 
 function applyStaticText() {
@@ -945,6 +943,12 @@ function renderBookCount() {
   if (bookCount) bookCount.innerHTML = `<strong>${featuredCount}</strong> 个精选场景 <span>${escapeHtml(workText)} · ${atlasPlaces.length} 个文学地点</span>`;
 }
 
+function coverAttributes(work, sizes) {
+  const src = escapeAttr(work.cover);
+  if (!work.coverThumb) return `src="${src}"`;
+  return `src="${src}" srcset="${escapeAttr(work.coverThumb)} 96w, ${src} ${work.coverWidth}w" sizes="${sizes}"`;
+}
+
 function buildBookshelf() {
   const works = data.works || [{ id: "all", title: "全部作品" }];
   works.forEach((work) => {
@@ -957,7 +961,7 @@ function buildBookshelf() {
     button.style.setProperty("--work-tint", theme.tint);
     const cover = work.id === "all"
       ? ""
-      : `<img src="${escapeAttr(work.cover)}" alt="" width="52" height="70" loading="lazy" />`;
+      : `<img ${coverAttributes(work, "(max-width: 767px) 33px, 45px")} alt="" width="52" height="70" loading="lazy" />`;
     button.innerHTML = `${cover}<span><strong>${escapeHtml(workTitle(work.id))}</strong>
       ${work.author ? `<small>${escapeHtml(work.author)}</small>` : ""}
       ${workCities[work.id] ? `<small>${escapeHtml(workCities[work.id])}</small>` : ""}
@@ -988,7 +992,7 @@ function renderWorkTabs() {
   mobileCurrentWork.textContent = selectedWork === "all" ? text.allWorks : workTitle(selectedWork);
   document.querySelector("#shelfSelection").textContent = mobileCurrentWork.textContent;
   const covers = selectedWork === "all" ? works.filter(work => work.cover).slice(0, 3) : [workById(selectedWork)];
-  document.querySelector("#shelfSample").innerHTML = covers.map(work => `<img src="${escapeAttr(work.cover)}" alt="" />`).join("");
+  document.querySelector("#shelfSample").innerHTML = covers.map(work => `<img ${coverAttributes(work, "23px")} alt="" />`).join("");
 }
 
 function themeForWork(workId) {
@@ -1054,9 +1058,15 @@ function renderMapLayers() {
   clusterFeatures = [];
   if (!map || !visiblePlaces.length) return;
 
+  // Cluster the full set so counts remain stable at the viewport edges.
+  const bounds = map.getBounds().pad(0.4);
   const clustered = clusteredPlaces(visiblePlaces);
-  clustered.clusters.forEach((cluster) => renderCluster(cluster));
-  clustered.places.forEach((place) => renderPlaceGeometry(place));
+  for (const cluster of clustered.clusters) {
+    if (bounds.contains([cluster.lat, cluster.lng])) renderCluster(cluster);
+  }
+  for (const place of clustered.places) {
+    if (place.id === selectedPlaceId || bounds.contains(latLng(place))) renderPlaceGeometry(place);
+  }
   updateMarkerVisuals();
 }
 
@@ -1222,7 +1232,7 @@ function renderCoverMarkers(places) {
         iconAnchor: [48, 116],
         html: `
           <span class="cover-pin" style="--pin-color:${escapeAttr(work.color || "#171a17")};--cover-x:${escapeAttr(offset[0])}px;--cover-y:${escapeAttr(offset[1])}px">
-            <img src="${escapeAttr(work.cover)}" alt="${escapeAttr(workTitle(work.id))} 封面" loading="lazy" />
+            <img ${coverAttributes(work, "(max-width: 767px) 44px, 64px")} alt="${escapeAttr(workTitle(work.id))} 封面" loading="lazy" />
             <span class="cover-title">${escapeHtml(workTitle(work.id))}</span>
           </span>
         `
@@ -1235,7 +1245,7 @@ function renderCoverMarkers(places) {
 
 function renderList(places) {
   const previousScrollTop = placeList.scrollTop;
-  placeList.innerHTML = "";
+  const cards = document.createDocumentFragment();
   places.forEach((place) => {
     const scene = primarySceneForPlace(place);
     const card = document.createElement("article");
@@ -1277,8 +1287,9 @@ function renderList(places) {
         updateMarkerVisuals();
       }
     });
-    placeList.appendChild(card);
+    cards.appendChild(card);
   });
+  placeList.replaceChildren(cards);
 
   const query = searchInput.value.trim().toLowerCase();
   const unmapped = unmappedPlaces.filter(place => matchesPlace(place, query));
@@ -1334,15 +1345,6 @@ function activatePlace(placeId, options = {}) {
   focusSelectedPlace(place, options);
 }
 
-function readingMapCenter(place, zoom) {
-  const location = latLng(place);
-  if (!window.matchMedia("(max-width: 767px)").matches) return location;
-  const mapBottom = map.getContainer().getBoundingClientRect().bottom;
-  const sheetTop = document.querySelector("#explorerPanel").getBoundingClientRect().top;
-  const covered = Math.max(0, Math.min(map.getSize().y, mapBottom - sheetTop));
-  return map.unproject(map.project(location, zoom).add([0, covered / 2]), zoom);
-}
-
 function focusSelectedPlace(place, options = {}) {
   document.querySelectorAll(".place-card").forEach((card) => {
     card.classList.toggle("active", card.dataset.placeId === place.id);
@@ -1359,9 +1361,9 @@ function focusSelectedPlace(place, options = {}) {
   renderMapLayers();
   if (options.zoom === true) {
     const zoom = zoomFor(place);
-    map.setView(readingMapCenter(place, zoom), zoom, { animate: true });
+    map.setView(latLng(place), zoom, { animate: true });
   } else if (!options.skipPan) {
-    map.panTo(readingMapCenter(place, map.getZoom()), { animate: true });
+    map.panTo(latLng(place), { animate: true });
   }
   renderDetail(place);
   renderMobileSheetSummary();
@@ -1776,13 +1778,12 @@ function buildSceneModel(rawScenes, places) {
 }
 
 function attachScenesToPlaces() {
-  rawPlaceIdToPlaceId = new Map();
-  atlasPlaces.forEach((place) => {
-    place.rawIds.forEach((rawId) => rawPlaceIdToPlaceId.set(rawId, place.id));
-    place.scenes = literaryScenes
-      .filter((scene) => scene.placeId === place.id)
-      .sort((a, b) => (a.narrativeOrder || 999) - (b.narrativeOrder || 999));
-  });
+  const placesById = new Map(atlasPlaces.map(place => [place.id, place]));
+  for (const place of atlasPlaces) place.scenes = [];
+  for (const scene of literaryScenes) placesById.get(scene.placeId).scenes.push(scene);
+  for (const place of atlasPlaces) {
+    place.scenes.sort((a, b) => (a.narrativeOrder || 999) - (b.narrativeOrder || 999));
+  }
 }
 
 function scenesForPlace(place) {

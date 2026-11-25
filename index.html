@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>小说城市漫游图</title>
     <meta name="description" content="小说城市漫游图：沿着文学中的地点，重新进入一座城市。" />
+    <link rel="preconnect" href="https://tile.openstreetmap.org" crossorigin />
+    <script defer src="./leaflet.js"></script>
+    <script defer src="./atlas-data.js"></script>
+    <script defer src="./collections.js"></script>
+    <script defer src="./place-media.js"></script>
+    <script defer src="./atlas.js"></script>
     <style>
 /* required styles */
 
@@ -2584,9 +2590,6 @@ p {
     bottom: calc(38vh + 110px);
   }
 
-  .shell.sheet-expanded .leaflet-bottom.leaflet-right {
-    bottom: calc(80vh + 58px);
-  }
 
   .shell.panel-collapsed .leaflet-bottom.leaflet-right {
     bottom: 186px;
@@ -3830,7 +3833,7 @@ body {
 
   .map-stage {
     position: absolute;
-    inset: 0 0 var(--bottom-nav-height);
+    inset: 0 0 calc(var(--bottom-nav-height) + var(--map-sheet-height, 44dvh));
     height: auto;
     min-height: 0;
   }
@@ -3972,6 +3975,8 @@ body {
     transform: translateY(var(--sheet-drag-y, 0));
     transition: height 190ms ease, transform 190ms ease;
   }
+
+  .shell.sheet-collapsed { --map-sheet-height: 112px; }
 
   .shell.sheet-collapsed .panel {
     height: 112px;
@@ -4131,25 +4136,22 @@ body {
 
   .map-action {
     right: 10px;
-    bottom: calc(44dvh + 56px);
+    left: 10px;
+    right: auto;
+    bottom: 12px;
     width: 44px;
     height: 44px;
   }
 
-  .leaflet-bottom.leaflet-right {
-    bottom: calc(44dvh + 100px);
-  }
-
-  .shell.sheet-collapsed .map-action {
-    bottom: 124px;
-  }
-
-  .shell.sheet-collapsed .leaflet-bottom.leaflet-right {
-    bottom: 168px;
+  .leaflet-bottom.leaflet-right,
+  .shell.panel-collapsed .leaflet-bottom.leaflet-right { bottom: 0; }
+  .shell.panel-collapsed .map-action { bottom: 12px; }
+  .shell.sheet-expanded .leaflet-bottom.leaflet-right {
+    bottom: max(0px, calc(min(86dvh, 100dvh - var(--header-height) - var(--bottom-nav-height)) - 44dvh));
   }
 
   .shell.sheet-expanded .map-action,
-  .shell.sheet-expanded .leaflet-bottom.leaflet-right {
+  .shell.sheet-expanded .leaflet-control-zoom {
     visibility: hidden;
   }
 
@@ -4349,6 +4351,7 @@ body {
 @media (max-width: 355px) {
   .book-grid { grid-template-columns: 1fr; }
 }
+.place-list .place-card { content-visibility: auto; contain-intrinsic-size: auto 98px; }
 </style>
   </head>
   <body>
@@ -4502,10 +4505,5 @@ body {
     </aside>
 
     <div class="toast" id="toast" role="status" aria-live="polite"><span></span><button type="button" hidden></button></div>
-    <script defer src="./leaflet.js"></script>
-    <script defer src="./atlas-data.js"></script>
-    <script defer src="./collections.js"></script>
-    <script defer src="./place-media.js"></script>
-    <script defer src="./atlas.js"></script>
   </body>
 </html>

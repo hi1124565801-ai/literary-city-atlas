@@ -649,6 +649,8 @@
         collectionCountLabel: "题辞 + 23 篇",
         source: "用户提供《野草》PDF；题辞与二十三篇散文诗逐篇整理，寓言、梦境与历史空间均明确标识。",
         cover: "./images/yecao-cover.webp",
+        coverWidth: 226,
+        coverThumb: "./images/yecao-cover-96.webp",
         coverAnchorPlaceId: "yecao-autumn-night-garden",
         coverCaption: "封面落在北京鲁迅故居：二十三篇散文诗的主要写作锚点。",
         coverOffset: [-20, -12]
@@ -662,6 +664,8 @@
         color: "#7d5538",
         source: "用户提供《百年孤独》中文 PDF；马孔多及其内部地点按虚构地理整理，并以阿拉卡塔卡作明确标注的文学参照。",
         cover: "./images/solitude-cover.webp",
+        coverWidth: 224,
+        coverThumb: "./images/solitude-cover-96.webp",
         coverAnchorPlaceId: "solitude-macondo-river",
         coverCaption: "封面落在马孔多河岸：一百年家族记忆从这里展开。",
         coverOffset: [26, -14]

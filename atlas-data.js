@@ -15,6 +15,8 @@ window.LOVER_MAP_DATA = {
       "color": "#0f766e",
       "source": "用户提供 PDF；地点由文本抽取后整理为第二版地图数据，含短引文锚点与文学化注释",
       "cover": "./images/lover-cover.webp",
+      "coverWidth": 240,
+      "coverThumb": "./images/lover-cover-96.webp",
       "coverAnchorPlaceId": "mekong-ferry",
       "coverCaption": "封面落在湄公河渡船：相遇从这里开始。"
     },
@@ -27,6 +29,8 @@ window.LOVER_MAP_DATA = {
       "color": "#8b5e34",
       "source": "用户提供 PDF；文字层有缺字，短引文保守使用可核对地名/短语，坐标参考公开地点资料并标注不确定性。",
       "cover": "./images/norwegian-cover.webp",
+      "coverWidth": 240,
+      "coverThumb": "./images/norwegian-cover-96.webp",
       "coverAnchorPlaceId": "nw-waseda-campus",
       "coverCaption": "封面落在早稻田校园：东京青春的核心坐标。"
     },
@@ -39,6 +43,8 @@ window.LOVER_MAP_DATA = {
       "color": "#6b4f48",
       "source": "用户提供《白夜行》PDF；地点由文本抽取后整理，虚构店铺/学校以可导航区域近似定位并标注不确定性。",
       "cover": "./images/byakuyako-cover.webp",
+      "coverWidth": 240,
+      "coverThumb": "./images/byakuyako-cover-96.webp",
       "coverAnchorPlaceId": "by-masumi-park",
       "coverCaption": "封面落在真澄公园与布施案发地一带：白夜的入口从这里打开。",
       "coverOffset": [
@@ -54,6 +60,8 @@ window.LOVER_MAP_DATA = {
       "color": "#2f5f86",
       "source": "用户提供 PDF；地点由文本抽取后整理，坐标结合公开资料与现代北京地名作近似定位。",
       "cover": "./images/chengnan-cover.webp",
+      "coverWidth": 240,
+      "coverThumb": "./images/chengnan-cover-96.webp",
       "coverAnchorPlaceId": "cn-chunshu-yongchun",
       "coverCaption": "封面落在椿树上二条一带：小英子的旧家与惠安馆故事从这里展开。"
     },
@@ -65,6 +73,8 @@ window.LOVER_MAP_DATA = {
       "color": "#7b3f61",
       "source": "用户提供 Penguin Classics PDF；地点由文本抽取后整理，坐标主要以 OpenStreetMap/Nominatim 查询结果为准，短引文为英文原文片段。",
       "cover": "./images/dalloway-cover.webp",
+      "coverWidth": 240,
+      "coverThumb": "./images/dalloway-cover-96.webp",
       "coverAnchorPlaceId": "md-westminster",
       "coverCaption": "封面落在 Westminster：Clarissa 的一天从这里向伦敦街道铺开。"
     },
@@ -88,6 +98,8 @@ window.LOVER_MAP_DATA = {
       ],
       "source": "用户提供《倾城之恋》小说集 PDF；九篇小说逐篇整理，原址不详或虚构地点以可导航区域近似定位并明确标注。",
       "cover": "./images/qingcheng-cover.webp",
+      "coverWidth": 222,
+      "coverThumb": "./images/qingcheng-cover-96.webp",
       "coverAnchorPlaceId": "qing-love-repulse-hotel",
       "coverCaption": "封面落在浅水湾酒店旧址：小说集里最具标志性的香港文学坐标。",
       "coverOffset": [
@@ -104,6 +116,8 @@ window.LOVER_MAP_DATA = {
     "source": "用户提供 PDF；地点由文本抽取后整理为第二版地图数据，含短引文锚点与文学化注释",
     "copyrightNote": "页面展示短句/片段、页码与摘要式说明，避免复刻长段正文。",
     "cover": "./images/lover-cover.webp",
+    "coverWidth": 240,
+    "coverThumb": "./images/lover-cover-96.webp",
     "coverAnchorPlaceId": "mekong-ferry"
   },
   "places": [
