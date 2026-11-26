@@ -6,11 +6,12 @@
     <title>小说城市漫游图</title>
     <meta name="description" content="小说城市漫游图：沿着文学中的地点，重新进入一座城市。" />
     <link rel="preconnect" href="https://tile.openstreetmap.org" crossorigin />
+    <!-- The first view is the New Lianzi Hutong at zoom 14. -->
+    <link rel="preload" as="image" fetchpriority="low" href="https://tile.openstreetmap.org/14/13488/6208.png" crossorigin="anonymous" />
     <script defer src="./leaflet.js"></script>
-    <script defer src="./atlas-data.js"></script>
-    <script defer src="./collections.js"></script>
+    <script defer src="./atlas-catalog.js"></script>
     <script defer src="./place-media.js"></script>
-    <script defer src="./atlas.js"></script>
+    <script defer src="./atlas.js?v=reading2"></script>
     <style>
 /* required styles */
 
@@ -4352,14 +4353,21 @@ body {
   .book-grid { grid-template-columns: 1fr; }
 }
 .place-list .place-card { content-visibility: auto; contain-intrinsic-size: auto 98px; }
+
+.route-status { display: block; margin: 6px 0 0; padding: 0; min-height: 0; border: 0; background: none; color: var(--muted); font: 12px/1.5 var(--sans); }
+.brand strong { font: 650 clamp(15px, 1.4vw, 19px)/1.2 var(--serif-zh); letter-spacing: .03em; }
+.brand span { font: 11px/1.1 var(--serif); letter-spacing: .06em; }
+#shelfStatus:empty { display: none; }
+#shelfStatus { margin: 4px 0 10px; color: var(--muted); }
+.more-places { width: 100%; margin: 8px 0; padding: 10px; color: var(--accent-dark); border: 1px solid var(--line); background: var(--paper-light); cursor: pointer; }
 </style>
   </head>
   <body>
     <div class="app-shell">
     <header class="site-header">
-      <div class="brand" aria-label="Literary Atlas">
-        <strong>LITERARY ATLAS</strong>
-        <span>小说城市漫游图</span>
+      <div class="brand">
+        <strong>小说城市漫游图</strong>
+        <span lang="en">Literary City Atlas</span>
       </div>
       <nav class="nav-actions" aria-label="页面操作">
         <button class="walk-entry" id="walkEntry" type="button" aria-label="打开我的漫游">
@@ -4377,7 +4385,7 @@ body {
       <section class="hero" aria-labelledby="pageTitle">
         <div>
           <h1 id="pageTitle" data-i18n="heroTitle">小说城市漫游图</h1>
-          <p class="hero-copy" data-i18n="heroDek">沿着文学中的地点，重新进入一座城市。</p>
+          <p class="hero-copy" data-i18n="heroDek">选一幕读小说原文，或在地图上找一个地点。</p>
           <p class="hero-line">Literary City Atlas</p>
         </div>
         <div class="hero-meta" id="stats"></div>
@@ -4399,8 +4407,8 @@ body {
           </div>
 
           <div class="panel-inner">
-            <section class="scene-invitation" id="invitation" aria-label="从一幕出发">
-              <div class="invitation-top"><span>从一幕出发</span><button type="button" id="changeScene">换一幕 ↻</button></div>
+            <section class="scene-invitation" id="invitation" aria-label="从这一幕读起">
+              <div class="invitation-top"><span>从这一幕读起</span><button type="button" id="changeScene">换一幕 ↻</button></div>
               <button type="button" id="startScene" class="scene-ticket">
                 <span aria-live="polite"><strong id="invitationTitle">像汤匙的新帘子胡同</strong><small id="invitationSource">《城南旧事》 · 北京城南</small></span>
                 <span class="ticket-arrow" aria-hidden="true">读这一幕 →</span>
@@ -4409,18 +4417,18 @@ body {
 
             <button type="button" class="shelf-entry" id="openShelf" aria-haspopup="dialog" aria-controls="bookshelf">
               <span class="shelf-sample" id="shelfSample" aria-hidden="true"></span>
-              <strong id="shelfSelection">全部作品</strong><span>浏览书架 →</span>
+              <strong id="shelfSelection">城南旧事</strong><span>换一本书 →</span>
             </button>
             <div class="story-strip" id="storyTabs" aria-label="小说集篇目选择" hidden></div>
 
             <div class="controls">
               <div class="browse-toggle" role="group" aria-label="浏览模式">
-                <button type="button" data-scope-mode="featured" class="active">精选漫游</button>
-                <button type="button" data-scope-mode="all">全部地点</button>
+                <button type="button" data-scope-mode="featured" class="active">按故事读</button>
+                <button type="button" data-scope-mode="all">按地点找</button>
               </div>
               <label class="search">
                 <span class="search-icon" aria-hidden="true"></span>
-                <input id="search" type="search" placeholder="搜索地点、街道或小说..." />
+                <input id="search" type="search" aria-label="搜索地点、作品、作者或原文" placeholder="搜地点、作品、作者或原文" />
               </label>
               <div class="route-status" id="routeStatus" aria-live="polite"></div>
             </div>
@@ -4434,7 +4442,7 @@ body {
           <div class="mobile-map-bar" aria-label="移动端地图工具">
             <button id="mobileWorkButton" aria-haspopup="dialog" type="button" aria-label="选择作品">
               <span>当前作品</span>
-              <strong id="mobileCurrentWork">全部作品</strong>
+              <strong id="mobileCurrentWork">城南旧事</strong>
             </button>
             <button id="mobileSearchButton" type="button" aria-label="搜索地点">⌕</button>
           </div>
@@ -4465,7 +4473,8 @@ body {
     </div>
 
     <dialog id="bookshelf" class="book-dialog" aria-labelledby="shelfTitle">
-      <header><h2 id="shelfTitle">选择作品</h2><button type="button" class="drawer-close" id="closeShelf" aria-label="关闭书架">×</button></header>
+      <header><h2 id="shelfTitle">选一本书，进入它的地图</h2><button type="button" class="drawer-close" id="closeShelf" aria-label="关闭书架">×</button></header>
+      <p id="shelfStatus" role="status"></p>
       <div id="workTabs" class="book-grid"></div>
     </dialog>
 
@@ -4477,7 +4486,7 @@ body {
         <h2 id="aboutTitle" data-i18n="aboutTitle">关于本地图</h2>
         <p id="bookCount"></p>
         <p data-i18n="aboutBody">这张地图从小说中的空间出发，选取发生在城市中的相遇、独白、记忆、冲突与重要场景。地点并不只是故事的背景，也参与塑造人物如何感受、行动与回忆。</p>
-        <p data-i18n="aboutCopyright">在“精选漫游”中，你可以按照小说的叙事顺序阅读这些场景；遇到想亲自去看的地方，也可以加入“我的漫游”。小说原文与封面版权属于各自权利方；地图策展、地点说明和界面为本项目内容。</p>
+        <p data-i18n="aboutCopyright">在“按故事读”中，你可以按照小说的叙事顺序阅读这些场景；遇到想亲自去看的地方，也可以加入“我的漫游”。小说原文与封面版权属于各自权利方；地图策展、地点说明和界面为本项目内容。</p>
       </div>
     </aside>
 

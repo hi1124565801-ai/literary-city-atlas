@@ -85,24 +85,13 @@ const zhWorkTitles = {
   solitude: "百年孤独"
 };
 
-const workCities = {
-  lover: "西贡 / 湄公河",
-  norwegian: "东京 / 神户",
-  byakuyako: "大阪 / 东京",
-  chengnan: "北京城南",
-  dalloway: "伦敦",
-  qingcheng: "上海 / 香港",
-  yecao: "北京 / 广州 / 文本空间",
-  solitude: "马孔多 / 加勒比海岸"
-};
-
 const text = {
   documentTitle: "小说城市漫游图",
   navSubtitle: "文学 CityWalk",
   heroTitle: "小说城市漫游图",
-  heroDek: "沿着小说中的地点，重新进入一座城市。",
+  heroDek: "选一幕读小说原文，或在地图上找一个地点。",
   explorerEyebrow: "文学漫游",
-  searchPlaceholder: "搜索地点、街道、作品或作者...",
+  searchPlaceholder: "搜地点、作品、作者或原文",
   allWorks: "全部作品",
   allWorksAuthor: "跨作品地图",
   allWorksCity: "世界文学地点",
@@ -150,7 +139,7 @@ const text = {
   collapseSheet: "收起地点面板",
   aboutTitle: "关于这张文学地图",
   aboutBody: "这张地图从小说中的空间出发，选取发生在城市中的相遇、独白、记忆、冲突与重要场景。地点并不只是故事的背景，也参与塑造人物如何感受、行动与回忆。",
-  aboutCopyright: "在“精选漫游”中，你可以按照小说的叙事顺序阅读这些场景；遇到想亲自去看的地方，也可以加入“我的漫游”。小说原文与封面版权属于各自权利方；地图策展、地点说明和界面为本项目内容。",
+  aboutCopyright: "在“按故事读”中，你可以按照小说的叙事顺序阅读这些场景；遇到想亲自去看的地方，也可以加入“我的漫游”。小说原文与封面版权属于各自权利方；地图策展、地点说明和界面为本项目内容。",
   loadErrorTitle: "地图暂时没有渲染出来",
   loadErrorData: "地点数据没有加载成功。",
   loadErrorLeaflet: "地图库没有加载成功。请确认 vendor/leaflet/leaflet.js 存在。"
@@ -244,6 +233,15 @@ const startScene = document.querySelector("#startScene");
 const changeScene = document.querySelector("#changeScene");
 const openingScenes = ["scene-cn-new-lianzi", "scene-md-big-ben", "scene-mekong-ferry"];
 let invitationIndex = 0;
+let passageSearch = null;
+let searchRequest = null;
+let searchFailed = false;
+let libraryRequest = null;
+let libraryReady = false;
+let bookChoice = 0;
+const listPageSize = 10;
+let listLimit = listPageSize;
+let listFilterKey = "";
 const routeStatus = document.querySelector("#routeStatus");
 const stats = document.querySelector("#stats");
 const bookCount = document.querySelector("#bookCount");
@@ -270,46 +268,50 @@ const photoViewerCaption = document.querySelector("#photoViewerCaption");
 const mobileSheetKicker = document.querySelector("#mobileSheetKicker");
 const mobileSheetTitle = document.querySelector("#mobileSheetTitle");
 
-init().catch((error) => showFatal(error));
+try { init(); } catch (error) { showFatal(error); }
 
-async function init() {
+function init() {
   if (!window.L) {
     throw new Error(text.loadErrorLeaflet);
   }
-  data = await loadData();
-  atlasPlaces = buildPlaceModel(data.places || []);
-  literaryScenes = buildSceneModel(data.scenes || [], atlasPlaces);
-  attachScenesToPlaces();
-  unmappedPlaces = atlasPlaces.filter((place) => !place.geometry.coordinates);
-  atlasPlaces = atlasPlaces.filter((place) => place.geometry.coordinates);
+  data = window.ATLAS_CATALOG;
+  if (!data) throw new Error(text.loadErrorData);
+  selectedWork = data.firstWork;
+  activeStoryWorkId = selectedWork;
+  useCatalog(data.places, data.scenes);
   loadMyWalk();
   setupMap();
   setupControls();
   applyStaticText();
   renderBookCount();
-  buildBookshelf();
   render();
 }
 
-async function loadData() {
-  if (window.LOVER_MAP_DATA) return mergeDataAdditions(window.LOVER_MAP_DATA);
-  const response = await fetch("./data/lover-places.json");
-  if (!response.ok) throw new Error(text.loadErrorData);
-  return mergeDataAdditions(await response.json());
+function useCatalog(places, scenes) {
+  atlasPlaces = places;
+  literaryScenes = scenes;
+  attachScenesToPlaces();
+  unmappedPlaces = places.filter(place => !place.geometry.coordinates);
+  atlasPlaces = places.filter(place => place.geometry.coordinates);
 }
 
-function mergeDataAdditions(base) {
-  const additions = window.LITERARY_MAP_ADDITIONS;
-  if (!additions) return base;
-  const existingWorkIds = new Set((base.works || []).map((work) => work.id));
-  const existingPlaceIds = new Set((base.places || []).map((place) => place.id));
-  const existingSceneIds = new Set((base.scenes || []).map((scene) => scene.id));
-  return {
-    ...base,
-    works: [...(base.works || []), ...(additions.works || []).filter((work) => !existingWorkIds.has(work.id))],
-    places: [...(base.places || []), ...(additions.places || []).filter((place) => !existingPlaceIds.has(place.id))],
-    scenes: [...(base.scenes || []), ...(additions.scenes || []).filter((scene) => !existingSceneIds.has(scene.id))]
-  };
+function loadLibrary() {
+  if (!libraryRequest) {
+    libraryRequest = fetch("./atlas-library.json")
+      .then(response => {
+        if (!response.ok) throw new Error(text.loadErrorData);
+        return response.json();
+      })
+      .then(rest => {
+        useCatalog(data.places.concat(rest.places), data.scenes.concat(rest.scenes));
+        libraryReady = true;
+      })
+      .catch(error => {
+        libraryRequest = null;
+        throw error;
+      });
+  }
+  return libraryRequest;
 }
 
 function showFatal(error) {
@@ -365,7 +367,10 @@ function setupMap() {
   });
 
   map.on("moveend", () => {
-    if (!mapWheelPanActive) renderMapLayers();
+    if (!mapWheelPanActive) {
+      renderMapLayers();
+      renderCoverMarkers(visiblePlaces);
+    }
   });
 
   requestAnimationFrame(() => {
@@ -593,7 +598,10 @@ function setupControls() {
     const detail = window.matchMedia("(max-width: 767px)").matches ? sheetDetail : detailCard;
     detail.querySelector("[data-detail-close]")?.focus({ preventScroll: true });
   });
-  searchInput.addEventListener("input", render);
+  searchInput.addEventListener("input", () => {
+    if (searchInput.value.trim()) loadPassageSearch();
+    render();
+  });
   window.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || bookshelf.open) return;
     if (photoViewer.classList.contains("open")) setPhotoViewerOpen(false);
@@ -763,6 +771,12 @@ function updateSheetHandleLabel() {
 }
 
 function openBookshelf() {
+  if (!workTabs.childElementCount) {
+    buildBookshelf();
+    renderWorkTabs();
+  }
+  bookChoice++;
+  document.querySelector("#shelfStatus").textContent = "";
   bookshelf.showModal();
   syncMobileNav();
   workTabs.querySelector('[aria-pressed="true"]')?.focus({ preventScroll: true });
@@ -828,7 +842,8 @@ function renderInvitation() {
   const readable = scenes.filter(scene => visiblePlaceIds.includes(scene.placeId));
   invitation.hidden = selectedScopeMode !== "featured" || Boolean(searchInput.value.trim()) || !readable.length;
   if (invitation.hidden) return;
-  const scene = readable[invitationIndex % readable.length];
+  const openingIndex = readable.findIndex(scene => openingScenes.includes(scene.id));
+  const scene = readable[(invitationIndex + Math.max(0, openingIndex)) % readable.length];
   const place = placeById(scene.placeId);
   document.querySelector("#invitationTitle").textContent = scene.sceneTitle;
   document.querySelector("#invitationSource").textContent = sceneSourceLabel(scene) + " · " + (place.city || place.name);
@@ -865,6 +880,22 @@ function filteredPlaces() {
   return basePlaces.filter(place => matchesPlace(place, query));
 }
 
+function loadPassageSearch() {
+  if (passageSearch || searchRequest) return;
+  searchFailed = false;
+  searchRequest = fetch("./passage-search.json")
+    .then(response => {
+      if (!response.ok) throw new Error("Search index unavailable");
+      return response.json();
+    })
+    .then(index => { passageSearch = index; })
+    .catch(() => { searchFailed = true; })
+    .finally(() => {
+      searchRequest = null;
+      if (searchInput.value.trim()) render();
+    });
+}
+
 function matchesPlace(place, query) {
   const workMatch = selectedWork === "all" || place.works.some((entry) => entry.workId === selectedWork);
   const storyMatch = selectedStory === "all" || place.scenes.some((scene) => sceneMatchesCurrentSelection(scene));
@@ -881,14 +912,16 @@ function matchesPlace(place, query) {
       workTitle(entry.workId),
       workOriginalTitle(entry.workId),
       workAuthor(entry.workId),
-      entry.context,
-      entry.passages.map((passage) => `${passage.text} ${passage.translation || ""} ${passage.context || ""}`).join(" ")
+      entry.context
     ].join(" ")).join(" ")
   ].join(" ").toLowerCase();
-  return haystack.includes(query);
+  return haystack.includes(query) || Boolean(passageSearch?.[place.id]?.includes(query));
 }
 
 function orderedPlaces(places) {
+  if (selectedScopeMode === "all") {
+    return places.slice().sort((a, b) => a.name.localeCompare(b.name, "zh-Hans-CN"));
+  }
   return places.slice().sort((a, b) => {
     const aw = minSceneOrder(a);
     const bw = minSceneOrder(b);
@@ -936,11 +969,11 @@ function renderBookCount() {
   const works = (data.works || []).filter((work) => work.id !== "all");
   const collectionCount = works.filter((work) => Array.isArray(work.stories) && work.stories.length).length;
   const novelCount = works.length - collectionCount;
-  const featuredCount = literaryScenes.filter((scene) => scene.featured).length;
+  const featuredCount = data.featuredCount;
   const workText = collectionCount
     ? `${novelCount} 本小说 · ${collectionCount} 部作品集`
     : `${novelCount} 本小说`;
-  if (bookCount) bookCount.innerHTML = `<strong>${featuredCount}</strong> 个精选场景 <span>${escapeHtml(workText)} · ${atlasPlaces.length} 个文学地点</span>`;
+  if (bookCount) bookCount.innerHTML = `<strong>${featuredCount}</strong> 个精选场景 <span>${escapeHtml(workText)} · ${data.placeCount} 个文学地点</span>`;
 }
 
 function coverAttributes(work, sizes) {
@@ -964,9 +997,21 @@ function buildBookshelf() {
       : `<img ${coverAttributes(work, "(max-width: 767px) 33px, 45px")} alt="" width="52" height="70" loading="lazy" />`;
     button.innerHTML = `${cover}<span><strong>${escapeHtml(workTitle(work.id))}</strong>
       ${work.author ? `<small>${escapeHtml(work.author)}</small>` : ""}
-      ${workCities[work.id] ? `<small>${escapeHtml(workCities[work.id])}</small>` : ""}
+      ${data.workCities[work.id] ? `<small>${escapeHtml(data.workCities[work.id])}</small>` : ""}
       </span>`;
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
+      const choice = ++bookChoice;
+      if (!libraryReady && work.id !== data.firstWork) {
+        const status = document.querySelector("#shelfStatus");
+        status.textContent = "正在打开作品地图…";
+        try { await loadLibrary(); }
+        catch {
+          if (choice === bookChoice) status.textContent = "作品地图未能加载，点选书名可重试。";
+          return;
+        }
+        if (choice !== bookChoice || !bookshelf.open) return;
+        status.textContent = "";
+      }
       bookshelf.close();
       searchInput.value = "";
       invitationIndex = 0;
@@ -1181,7 +1226,8 @@ function renderPlaceGeometry(place) {
 function markerIcon(place) {
   const routeOrder = routeStopOrder(place.id);
   const count = place.scenes.filter((scene) => sceneMatchesCurrentSelection(scene)).length ||
-    place.works.reduce((sum, entry) => sum + Math.max(1, entry.passages.length), 0);
+    place.works.reduce((sum, entry) => sum + Math.max(1, entry.passageCount), 0);
+  const invitedPlace = !selectedPlaceId && !invitation.hidden && sceneById(startScene.dataset.scene)?.placeId === place.id;
   const classes = [
     "atlas-marker",
     `geometry-${place.geometry.type}`,
@@ -1195,7 +1241,7 @@ function markerIcon(place) {
     iconSize: [32, 32],
     iconAnchor: [16, 16],
     html: `<span class="pin">${escapeHtml(routeOrder ? String(routeOrder) : count > 1 ? String(count) : "")}</span>
-      ${selectedPlaceId === place.id ? `<span class="reading-place-label">${escapeHtml(place.name)}</span>` : ""}`
+      ${selectedPlaceId === place.id || invitedPlace ? `<span class="reading-place-label">${escapeHtml(place.name)}</span>` : ""}`
   });
 }
 
@@ -1216,11 +1262,12 @@ function renderCoverMarkers(places) {
   const visibleWorkIds = new Set(places.flatMap((place) => place.works.map((entry) => entry.workId)));
   const works = (data.works || []).filter((work) => work.id !== "all" && work.cover && visibleWorkIds.has(work.id));
 
+  const bounds = map.getBounds().pad(.4);
   works.forEach((work) => {
     const anchor = places.find((place) => place.rawIds.includes(work.coverAnchorPlaceId)) ||
       atlasPlaces.find((place) => place.rawIds.includes(work.coverAnchorPlaceId)) ||
       places.find((place) => place.works.some((entry) => entry.workId === work.id));
-    if (!anchor || !anchor.geometry.coordinates) return;
+    if (!anchor?.geometry.coordinates || !bounds.contains(latLng(anchor))) return;
     const offset = Array.isArray(work.coverOffset) ? work.coverOffset : [0, 0];
 
     const marker = L.marker(latLng(anchor), {
@@ -1244,27 +1291,33 @@ function renderCoverMarkers(places) {
 }
 
 function renderList(places) {
-  const previousScrollTop = placeList.scrollTop;
+  const query = searchInput.value.trim().toLowerCase();
+  const key = JSON.stringify([selectedWork, selectedStory, selectedScopeMode, query]);
+  const changed = key !== listFilterKey;
+  if (changed) listLimit = listPageSize;
+  listFilterKey = key;
+  const previousScrollTop = changed ? 0 : placeList.scrollTop;
   const cards = document.createDocumentFragment();
-  places.forEach((place) => {
+  places.slice(0, listLimit).forEach((place) => {
     const scene = primarySceneForPlace(place);
     const card = document.createElement("article");
     card.className = `place-card ${selectedPlaceId === place.id ? "active" : ""}`;
     card.dataset.placeId = place.id;
     if (scene) card.dataset.sceneId = scene.id;
     card.tabIndex = 0;
+    card.setAttribute("role", "button");
     const sceneWork = scene ? sceneSourceLabel(scene) : place.works.map((entry) => `《${workTitle(entry.workId)}》`).join(" · ");
     const added = isInRoute(place.id, scene && scene.id);
-    const sceneLabel = scene ? scene.sceneTitle : "小说中的地点";
+    const reading = selectedScopeMode === "featured" && scene;
     const intro = scene ? scene.sceneIntro : placeSceneIntro(place);
     const routeOrder = routeStopOrder(place.id);
     card.innerHTML = `
       <span class="place-index geometry-${place.geometry.type}" aria-hidden="true">${routeOrder ? escapeHtml(String(routeOrder)) : ""}</span>
       <div class="place-content">
-        <h3>${escapeHtml(place.name)}<span class="modern">${escapeHtml(sceneLabel)}</span></h3>
+        <h3>${escapeHtml(reading ? scene.sceneTitle : place.name)}</h3>
         <div class="meta">
           <span>${escapeHtml(sceneWork)}</span>
-          <span>${escapeHtml(place.city)}${place.country ? ` · ${escapeHtml(place.country)}` : ""}</span>
+          <span>${escapeHtml(reading ? place.name : (place.city || place.country))}</span>
           ${added ? `<span>${escapeHtml(text.routeAdded)}</span>` : ""}
         </div>
         <p class="summary">${escapeHtml(intro || place.context || place.note || "")}</p>
@@ -1290,11 +1343,22 @@ function renderList(places) {
     cards.appendChild(card);
   });
   placeList.replaceChildren(cards);
-
-  const query = searchInput.value.trim().toLowerCase();
+  if (places.length > listLimit) {
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "more-places";
+    more.textContent = `再看 ${Math.min(listPageSize, places.length - listLimit)} 个地点（已显示 ${listLimit} / ${places.length}）`;
+    more.addEventListener("click", () => {
+      const firstNew = places[listLimit];
+      listLimit += listPageSize;
+      renderList(places);
+      placeList.querySelector(`[data-place-id="${CSS.escape(firstNew.id)}"]`)?.focus();
+    });
+    placeList.appendChild(more);
+  }
   const unmapped = unmappedPlaces.filter(place => matchesPlace(place, query));
   renderUnmappedList(unmapped);
-  if (query && !places.length && !unmapped.length) {
+  if (query && !places.length && !unmapped.length && !searchRequest && !searchFailed) {
     const empty = document.createElement("div");
     empty.className = "empty-places";
     empty.innerHTML = '<p>当前范围内没有匹配的地点。</p><button type="button">清除搜索</button>';
@@ -1305,9 +1369,20 @@ function renderList(places) {
     });
     placeList.appendChild(empty);
   }
-  requestAnimationFrame(() => {
-    placeList.scrollTop = previousScrollTop;
-  });
+  if (query && (searchRequest || searchFailed)) {
+    const status = document.createElement("div");
+    status.className = "empty-places";
+    status.setAttribute("role", "status");
+    status.textContent = searchRequest ? "正在查找原文中的匹配…" : "原文搜索暂时不可用。";
+    if (searchFailed) {
+      const retry = document.createElement("button");
+      retry.textContent = "重新查找";
+      retry.onclick = () => { loadPassageSearch(); render(); };
+      status.appendChild(retry);
+    }
+    placeList.prepend(status);
+  }
+  placeList.scrollTop = previousScrollTop;
 }
 
 function renderUnmappedList(places) {
@@ -1346,6 +1421,11 @@ function activatePlace(placeId, options = {}) {
 }
 
 function focusSelectedPlace(place, options = {}) {
+  const index = visiblePlaceIds.indexOf(place.id);
+  if (index >= listLimit) {
+    listLimit = Math.ceil((index + 1) / listPageSize) * listPageSize;
+    renderList(visiblePlaces);
+  }
   document.querySelectorAll(".place-card").forEach((card) => {
     card.classList.toggle("active", card.dataset.placeId === place.id);
   });
@@ -1706,42 +1786,6 @@ function excerptHtml(excerpt) {
   `;
 }
 
-function workEntryHtml(entry) {
-  const work = workById(entry.workId);
-  const original = workOriginalTitle(entry.workId);
-  const passageCount = entry.passages.length;
-  const [firstPassage, ...rest] = entry.passages;
-  return `
-    <section class="work-entry">
-      <header>
-        <strong>《${escapeHtml(workTitle(entry.workId))}》</strong>
-        ${original && original !== workTitle(entry.workId) ? `<span>${escapeHtml(original)}</span>` : ""}
-        ${work && work.author ? `<em>${escapeHtml(work.author)}</em>` : ""}
-      </header>
-      ${entry.context ? `<p class="detail-note"><span>${escapeHtml(text.literaryContext)}</span>${escapeHtml(entry.context)}</p>` : ""}
-      ${firstPassage ? passageHtml(firstPassage) : ""}
-      ${rest.length ? `
-        <details class="more-passages">
-          <summary>${escapeHtml(text.continueReading)} ${rest.length} 段</summary>
-          ${rest.map((passage) => passageHtml(passage)).join("")}
-        </details>
-      ` : ""}
-      ${!passageCount && entry.placeNote ? `<p class="detail-note"><span>${escapeHtml(text.placeNote)}</span>${escapeHtml(entry.placeNote)}</p>` : ""}
-    </section>
-  `;
-}
-
-function passageHtml(passage) {
-  const alternate = passage.translation || passage.original;
-  return `
-    <figure class="detail-quote" data-passage-id="${escapeAttr(passage.id)}">
-      ${passage.context ? `<figcaption>${escapeHtml(passage.context)}</figcaption>` : ""}
-      <blockquote data-primary="${escapeAttr(passage.text)}" data-alt="${escapeAttr(alternate || "")}" data-showing="primary">${escapeHtml(passage.text)}</blockquote>
-      ${alternate ? `<button type="button" class="passage-toggle" data-lang-toggle>${escapeHtml(passage.translation ? text.viewOriginal : text.viewTranslation)}</button>` : ""}
-    </figure>
-  `;
-}
-
 function togglePassageLanguage(button) {
   const figure = button.closest(".detail-quote");
   const blockquote = figure ? figure.querySelector("blockquote") : null;
@@ -1750,31 +1794,6 @@ function togglePassageLanguage(button) {
   blockquote.textContent = showingAlt ? blockquote.dataset.primary : blockquote.dataset.alt;
   blockquote.dataset.showing = showingAlt ? "primary" : "alt";
   button.textContent = showingAlt ? text.viewOriginal : text.viewTranslation;
-}
-
-function buildSceneModel(rawScenes, places) {
-  const byRawId = new Map();
-  places.forEach((place) => {
-    place.rawIds.forEach((rawId) => byRawId.set(rawId, place));
-  });
-  return rawScenes.map((scene) => {
-    const place = byRawId.get(scene.placeId);
-    if (!place) return null;
-    return {
-      ...scene,
-      placeId: place.id,
-      rawPlaceId: scene.placeId,
-      excerpts: (scene.excerpts || []).map((excerpt, index) => ({
-        id: excerpt.id || `${scene.id}-excerpt-${index + 1}`,
-        text: String(excerpt.text || "").trim(),
-        kind: excerpt.kind || "narrative-scene",
-        speaker: excerpt.speaker || "",
-        language: excerpt.language || (scene.workId === "dalloway" ? "en" : "zh"),
-        translation: excerpt.translation || "",
-        original: excerpt.original || ""
-      })).filter((excerpt) => excerpt.text)
-    };
-  }).filter(Boolean);
 }
 
 function attachScenesToPlaces() {
@@ -1966,8 +1985,8 @@ function setupWalkDrawer() {
 
 function setWalkOpen(open) {
   if (!walkDrawer) return;
-  if (open) renderWalkSummary();
   walkDrawer.classList.toggle("open", open);
+  if (open) renderWalkSummary();
   walkDrawer.setAttribute("aria-hidden", String(!open));
   syncMobileNav();
 }
@@ -1980,6 +1999,16 @@ function renderWalkSummary() {
     mobileWalkCount.hidden = count === 0;
   }
   if (!walkPanelContent) return;
+  if (!libraryReady && count && myRouteStops.some(stop => !placeById(stop.placeId))) {
+    if (walkDrawer.classList.contains("open")) {
+      walkPanelContent.textContent = "正在读取收藏地点…";
+      loadLibrary().then(renderWalkSummary).catch(() => {
+        walkPanelContent.innerHTML = '<p>收藏地点未能加载。</p><button type="button">重新读取</button>';
+        walkPanelContent.querySelector("button").onclick = renderWalkSummary;
+      });
+    }
+    return;
+  }
   if (!count) {
     walkPanelContent.innerHTML = `
       <div class="walk-empty">
@@ -2254,23 +2283,12 @@ function updateModeControls() {
 
 function renderRouteStatus() {
   if (!routeStatus) return;
-  const showStoryGuide = selectedScopeMode === "featured";
-  routeStatus.hidden = !showStoryGuide;
-  if (!showStoryGuide) {
-    routeStatus.innerHTML = "";
-    return;
-  }
-  const storyCount = activeStoryWorkId ? storyScenesForActiveWork().length : featuredScenesForCurrentWork().length;
-  const storyText = activeStoryWorkId
-    ? activeStoryTitle
-      ? `《${workTitle(activeStoryWorkId)}》 · 〈${activeStoryTitle}〉`
-      : `《${workTitle(activeStoryWorkId)}》的精选场景`
-    : "选择一本书，或从地图打开一幕";
-  const routeText = myRouteStops.length ? `我的漫游已收藏 ${myRouteStops.length} 个地点` : `${storyCount} 幕可读`;
-  routeStatus.innerHTML = `
-    <span>${escapeHtml(storyText)}</span>
-    <em>${escapeHtml(routeText)}</em>
-  `;
+  const scope = selectedWork === "all" ? "跨作品" : `《${workTitle(selectedWork)}》`;
+  const query = searchInput.value.trim();
+  const mode = selectedScopeMode === "featured" ? "故事地点" : "地点索引";
+  routeStatus.textContent = query
+    ? `${scope} · 搜索结果 · 地图上 ${visiblePlaces.length} 处`
+    : `${scope}${selectedStory !== "all" ? " · " + selectedStory : ""} · ${mode}（${visiblePlaces.length} 处）`;
 }
 
 function placeById(placeId) {
@@ -2281,207 +2299,6 @@ function precisionHint(place) {
   if (place.geometry.type === "approximate") return text.precisionApproximate;
   if (place.geometry.type === "area") return text.precisionArea;
   return "";
-}
-
-function buildPlaceModel(rawPlaces) {
-  const groups = new Map();
-  rawPlaces.forEach((raw) => {
-    const key = placeKey(raw);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(raw);
-  });
-
-  return [...groups.entries()].map(([key, raws]) => {
-    const primary = choosePrimaryRaw(raws);
-    const geometry = geometryFor(primary);
-    const entries = groupWorkEntries(raws);
-    const aliases = unique(raws.flatMap((raw) => [raw.name, raw.modernName, raw.searchLabel]).filter(Boolean))
-      .filter((alias) => alias !== primary.name);
-    return {
-      id: `place-${key}`,
-      rawIds: raws.map((raw) => raw.id),
-      primaryType: primary.type || "",
-      types: unique(raws.map((raw) => raw.type).filter(Boolean)),
-      name: cleanName(primary.name),
-      aliases,
-      city: cityFor(primary),
-      country: primary.country || "",
-      geometry,
-      searchLabel: primary.searchLabel || primary.modernName || primary.name,
-      context: entries.find((entry) => entry.context)?.context || primary.literaryNote || primary.evidenceSummary || "",
-      note: primary.mapNote || primary.evidenceSummary || "",
-      works: entries
-    };
-  });
-}
-
-function choosePrimaryRaw(raws) {
-  return raws.slice().sort((a, b) => {
-    const ap = precisionRank(a);
-    const bp = precisionRank(b);
-    return ap - bp || (b.mentions || 0) - (a.mentions || 0);
-  })[0];
-}
-
-function groupWorkEntries(raws) {
-  const byWork = new Map();
-  raws.forEach((raw) => {
-    if (!byWork.has(raw.workId)) byWork.set(raw.workId, []);
-    byWork.get(raw.workId).push(raw);
-  });
-  return [...byWork.entries()].map(([workId, group]) => {
-    const primary = choosePrimaryRaw(group);
-    const passages = group.flatMap((raw) => passagesForRaw(raw));
-    return {
-      workId,
-      context: primary.literaryNote || primary.evidenceSummary || "",
-      placeNote: primary.mapNote || primary.evidenceSummary || "",
-      passages: uniquePassages(passages)
-    };
-  });
-}
-
-function passagesForRaw(raw) {
-  if (raw.passages && Array.isArray(raw.passages)) {
-    return raw.passages
-      .map((passage, index) => normalizePassage(passage, raw, index))
-      .filter(Boolean);
-  }
-
-  const quotes = raw.quotes && Array.isArray(raw.quotes)
-    ? raw.quotes
-    : raw.quoteFull
-      ? [raw.quoteFull]
-      : raw.quote
-        ? [raw.quote]
-        : [];
-  return quotes
-    .map((quote, index) => String(quote || "").trim())
-    .filter((quote) => isDisplayQuote(quote, raw))
-    .map((quote, index) => ({
-      id: `${raw.id}-passage-${index + 1}`,
-      text: quote,
-      language: raw.workId === "dalloway" ? "en" : "zh",
-      context: passageContext(raw, index)
-    }));
-}
-
-function normalizePassage(passage, raw, index) {
-  if (!passage) return null;
-  const source = typeof passage === "string" ? { text: passage } : passage;
-  const quote = String(source.text || "").trim();
-  if (!isDisplayQuote(quote, raw)) return null;
-  return {
-    id: source.id || `${raw.id}-passage-${index + 1}`,
-    text: quote,
-    language: source.language || (raw.workId === "dalloway" ? "en" : "zh"),
-    translation: source.translation || "",
-    original: source.original || "",
-    type: source.type || "",
-    context: source.sceneContext || source.context || passageContext(raw, index)
-  };
-}
-
-function isDisplayQuote(quote, raw) {
-  const plain = quote.replace(/[“”"'.。？！、，；：\s]/g, "");
-  if (!plain) return false;
-  const names = [raw.name, raw.modernName, raw.searchLabel].filter(Boolean).map((value) => String(value).replace(/\s/g, ""));
-  if (names.some((name) => plain === name || name.includes(plain) && plain.length < 8)) return false;
-  const chineseCount = (quote.match(/[\u4e00-\u9fff]/g) || []).length;
-  if (chineseCount && chineseCount < 10) return false;
-  if (!chineseCount && quote.length < 28) return false;
-  return true;
-}
-
-function passageContext(raw, index) {
-  if (raw.quoteLabel && !/原文|片段|excerpt/i.test(raw.quoteLabel)) return raw.quoteLabel;
-  if (index === 0 && raw.role) return raw.role;
-  return "";
-}
-
-function uniquePassages(passages) {
-  const seen = new Set();
-  return passages.filter((passage) => {
-    const key = passage.text.replace(/\s+/g, "");
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-function placeKey(raw) {
-  if (raw.placeId) return slug(raw.placeId);
-  const label = normalizePlaceLabel(raw.searchLabel || raw.modernName || raw.name);
-  const coord = raw.lat != null && raw.lng != null ? `${Number(raw.lat).toFixed(5)},${Number(raw.lng).toFixed(5)}` : "unmapped";
-  return slug(`${label}-${coord}`);
-}
-
-function geometryFor(raw) {
-  if (raw.lat == null || raw.lng == null) {
-    return { type: "unmapped" };
-  }
-  const type = precisionGeometry(raw);
-  const geometry = {
-    type,
-    coordinates: [Number(raw.lng), Number(raw.lat)]
-  };
-  if (type !== "point") geometry.radiusMeters = radiusFor(raw, type);
-  return geometry;
-}
-
-function precisionGeometry(raw) {
-  if (raw.confidence === "ambiguous") return "area";
-  if (raw.confidence === "likely") return "approximate";
-  if (["regional", "area", "street_area", "district", "city"].includes(raw.precision)) return "area";
-  if (["city", "district", "ambiguous_area", "mountain_range", "sea", "country", "city_memory"].includes(raw.type)) return "area";
-  return "point";
-}
-
-function radiusFor(raw, type) {
-  if (raw.geometry && raw.geometry.radiusMeters) return raw.geometry.radiusMeters;
-  if (type === "area") {
-    if (raw.type === "city" || raw.precision === "city") return 6500;
-    if (raw.type === "country") return 200000;
-    if (raw.type === "mountain_range" || raw.type === "sea") return 70000;
-    if (raw.type === "district" || raw.precision === "district") return 2200;
-    return 1200;
-  }
-  return raw.precision === "street_area" ? 700 : 420;
-}
-
-function precisionRank(raw) {
-  const type = precisionGeometry(raw);
-  if (type === "point") return 1;
-  if (type === "approximate") return 2;
-  return 3;
-}
-
-function cityFor(raw) {
-  const label = raw.modernName || raw.searchLabel || raw.name || "";
-  const pieces = label.split(/[，,\/]/).map((part) => part.trim()).filter(Boolean);
-  if (pieces.length > 1) return pieces[0];
-  if (raw.country === "日本") return workCities[raw.workId] || "日本";
-  if (raw.country === "英国") return raw.workId === "dalloway" ? "伦敦及周边" : "英国";
-  if (raw.country === "中国") return raw.workId === "chengnan" ? "北京" : "中国";
-  if (raw.country === "越南") return label || "越南";
-  return label || raw.country || "";
-}
-
-function cleanName(name) {
-  return String(name || "").replace(/\s+/g, " ").trim();
-}
-
-function normalizePlaceLabel(label) {
-  return String(label || "").toLowerCase().replace(/\s+/g, " ").trim();
-}
-
-function slug(value) {
-  return String(value || "place")
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[^\w\u4e00-\u9fff.-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 96);
 }
 
 function unique(values) {
