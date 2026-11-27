@@ -1,0 +1,72 @@
+.place-gallery {
+  margin: 0 -20px 22px;
+  padding-top: 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-light);
+  font-family: var(--sans);
+}
+
+.place-detail-content:has(.place-gallery),
+.sheet-detail .place-detail-content:has(.place-gallery) { touch-action: pan-x pan-y; }
+
+.gallery-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px 10px;
+  color: var(--muted);
+}
+
+.gallery-heading h4 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .1em; }
+.gallery-heading > span { font-size: 11px; font-variant-numeric: tabular-nums; }
+
+.gallery-track {
+  display: flex;
+  width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  touch-action: pan-x pan-y;
+}
+
+.gallery-track::-webkit-scrollbar { display: none; }
+.gallery-slide { flex: 0 0 100%; min-width: 0; margin: 0; scroll-snap-align: start; }
+.gallery-image-wrap { position: relative; overflow: hidden; background: var(--paper-deep); }
+.place-gallery .gallery-photo-open { display: block; width: 100%; border: 0; padding: 0; background: transparent; cursor: zoom-in; }
+.gallery-photo-open img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; }
+.gallery-photo-open img[hidden] { display: none; }
+.gallery-image-error:not([hidden]) { display: grid; min-height: 210px; padding: 35px; place-items: center; color: var(--muted); font-size: 12px; line-height: 1.8; }
+.gallery-photo-type { position: absolute; top: 10px; left: 12px; padding: 4px 7px; background: rgba(250,247,240,.92); color: var(--ink); font-size: 10px; pointer-events: none; }
+.place-gallery .gallery-credit { position: absolute; z-index: 3; right: 8px; bottom: 8px; max-width: calc(100% - 16px); overflow: hidden; padding: 5px 7px; border-radius: 2px; background: rgba(31,27,23,.8); color: #fff; font-size: 9px; line-height: 1.4; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
+.gallery-credit:hover { text-decoration: underline; }
+.gallery-slide figcaption { display: flex; justify-content: space-between; gap: 10px; min-height: 56px; padding: 10px 20px 6px; color: var(--muted); font-size: 11px; line-height: 1.65; }
+.gallery-slide figcaption > span { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.gallery-slide figcaption a { flex-shrink: 0; align-self: flex-start; color: var(--accent-dark); font-size: 9px; }
+.gallery-reference-note { margin: 0; padding: 0 20px 10px; color: var(--accent-dark); font-size: 10px; line-height: 1.65; }
+.place-gallery:not(.scene-gallery):has(.gallery-reference-note) .gallery-photo-open img { object-fit: contain; }
+.gallery-controls { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 0 12px; }
+.gallery-controls[hidden] { display: none; }
+.place-gallery .gallery-arrow, .place-gallery .gallery-play { min-width: 38px; min-height: 38px; border: 0; background: transparent; color: var(--accent-dark); cursor: pointer; }
+.place-gallery .gallery-arrow { font: 24px/1 var(--serif); }
+.place-gallery .gallery-play { min-width: 44px; font-size: 11px; }
+.gallery-dots { display: flex; align-items: center; justify-content: center; flex: 1; }
+.place-gallery [data-gallery-dot] { display: grid; width: 26px; height: 34px; place-items: center; border: 0; padding: 0; background: transparent; cursor: pointer; }
+.place-gallery [data-gallery-dot]::before { width: 5px; height: 5px; border-radius: 50%; background: var(--line); content: ""; }
+.place-gallery [data-gallery-dot][aria-pressed="true"]::before { width: 14px; border-radius: 4px; background: var(--accent); }
+.gallery-status { padding: 7px 20px 13px; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.place-gallery :focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+.leaflet-control-scale { margin-bottom: 7px !important; }
+.leaflet-control-scale-line { background: rgba(250,247,240,.88); color: var(--ink); }
+
+@media (max-width: 767px) {
+  .sheet-detail .place-gallery { margin-right: -18px; margin-left: -18px; }
+  .gallery-heading { padding-right: 18px; padding-left: 18px; }
+  .gallery-slide figcaption { padding-right: 18px; padding-left: 18px; }
+  .gallery-reference-note { padding-right: 18px; padding-left: 18px; }
+  .gallery-status { padding-right: 18px; padding-left: 18px; }
+  .place-gallery [data-gallery-dot] { width: 25px; height: 44px; }
+  .place-gallery .gallery-arrow, .place-gallery .gallery-play { min-width: 44px; min-height: 44px; }
+}
+
+.scene-gallery .gallery-photo-open img { object-fit: cover; object-position: center; }

@@ -3257,8 +3257,8 @@ window.LOVER_MAP_DATA = {
       "passages": [
         {
           "id": "cn-xinghua-hepingmen-scene-1",
-          "text": "早晨的太阳，正照到西厢房里，照到她的不太干净的脸上。",
-          "sceneContext": "阳光照见妞儿的伤痕，也照见英子的怜悯。",
+          "text": "早晨的太阳照在土坡上，我走上土坡，太阳就照满我的全身。",
+          "sceneContext": "上学路上，英子走上城门边的土坡，清晨阳光照满全身。",
           "type": "atmosphere",
           "language": "zh"
         }
@@ -8630,13 +8630,13 @@ window.LOVER_MAP_DATA = {
       "id": "scene-cn-xinghua-hepingmen",
       "placeId": "cn-xinghua-hepingmen",
       "workId": "chengnan",
-      "sceneTitle": "阳光照见的脸",
-      "sceneIntro": "阳光照见妞儿的伤痕，也照见英子的怜悯。",
+      "sceneTitle": "上学路上的晨光",
+      "sceneIntro": "上学路上，英子走上城门边的土坡，清晨阳光照满全身。",
       "narrativeOrder": 14,
       "excerpts": [
         {
           "id": "cn-xinghua-hepingmen-scene-1",
-          "text": "早晨的太阳，正照到西厢房里，照到她的不太干净的脸上。",
+          "text": "早晨的太阳照在土坡上，我走上土坡，太阳就照满我的全身。",
           "kind": "atmosphere",
           "language": "zh"
         }
