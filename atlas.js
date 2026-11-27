@@ -268,9 +268,9 @@ const photoViewerCaption = document.querySelector("#photoViewerCaption");
 const mobileSheetKicker = document.querySelector("#mobileSheetKicker");
 const mobileSheetTitle = document.querySelector("#mobileSheetTitle");
 
-try { init(); } catch (error) { showFatal(error); }
+init().catch(showFatal);
 
-function init() {
+async function init() {
   if (!window.L) {
     throw new Error(text.loadErrorLeaflet);
   }
@@ -279,12 +279,25 @@ function init() {
   selectedWork = data.firstWork;
   activeStoryWorkId = selectedWork;
   useCatalog(data.places, data.scenes);
+  const requestedId = new URLSearchParams(location.search).get("scene");
+  if (requestedId && !sceneById(requestedId)) {
+    try { await loadLibrary(); }
+    catch { /* The opening book remains available if the wider library is offline. */ }
+  }
+  const scene = sceneById(requestedId);
+  const openingPlace = scene && placeById(scene.placeId);
+  if (openingPlace) {
+    selectedWork = scene.workId;
+    selectedScopeMode = scene.featured ? "featured" : "all";
+    activeStoryWorkId = selectedWork;
+  }
   loadMyWalk();
-  setupMap();
+  setupMap(openingPlace);
   setupControls();
   applyStaticText();
   renderBookCount();
   render();
+  if (openingPlace) selectScene(scene.id);
 }
 
 function useCatalog(places, scenes) {
@@ -325,7 +338,7 @@ function showFatal(error) {
   document.body.appendChild(message);
 }
 
-function setupMap() {
+function setupMap(openingPlace) {
   map = L.map("map", {
     zoomControl: false,
     worldCopyJump: false,
@@ -342,7 +355,7 @@ function setupMap() {
     wheelDebounceTime: 24,
     wheelPxPerZoomLevel: 84
   });
-  const opening = placeById(sceneById(openingScenes[0])?.placeId);
+  const opening = openingPlace || placeById(sceneById(openingScenes[0])?.placeId);
   if (opening) map.setView(latLng(opening), 14);
   else map.fitWorld();
   window.__literaryMap = map;
