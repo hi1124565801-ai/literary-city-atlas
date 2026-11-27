@@ -348,6 +348,7 @@ function setupMap() {
   window.__literaryMap = map;
 
   L.control.zoom({ position: "bottomright" }).addTo(map);
+  L.control.scale({ position: "bottomleft", imperial: false }).addTo(map);
   setupMapWheelIsolation();
   setupBaseLayerFallback();
 
@@ -360,7 +361,7 @@ function setupMap() {
     }
     const place = nearestClickablePlace(event.latlng);
     if (place) {
-      activatePlace(place.id, { keepZoom: true });
+      activatePlace(place.id);
       return;
     }
     clearSelectedPlace();
@@ -1439,17 +1440,33 @@ function focusSelectedPlace(place, options = {}) {
   }
 
   renderMapLayers();
-  if (options.zoom === true) {
-    const zoom = zoomFor(place);
-    map.setView(latLng(place), zoom, { animate: true });
-  } else if (!options.skipPan) {
-    map.panTo(latLng(place), { animate: true });
-  }
   renderDetail(place);
+  if (!options.skipPan) flyToPlace(place, options);
   renderMobileSheetSummary();
   renderRouteStatus();
   updateMarkerVisuals();
   if (options.flash) flashPlaceMarker(place.id);
+}
+
+function flyToPlace(place, options = {}) {
+  map.stop();
+  const currentZoom = map.getZoom();
+  const zoom = options.zoom === false ? currentZoom : Math.min(map.getMaxZoom(),
+    Math.max(currentZoom, zoomFor(place) + 1, Math.min(currentZoom + 1, 17)));
+  let center = latLng(place);
+  // Leave the selected point in the visible map beside the desktop detail panel.
+  if (!window.matchMedia("(max-width: 767px)").matches) {
+    const width = map.getSize().x;
+    const panelWidth = detailCard.getBoundingClientRect().width + 44;
+    if (width > panelWidth + 180) {
+      center = map.unproject(map.project(center, zoom).subtract([panelWidth / 2, 0]), zoom);
+    }
+  }
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    map.setView(center, zoom, { animate: false });
+  } else {
+    map.flyTo(center, zoom, { duration: 1.1, easeLinearity: 0.25 });
+  }
 }
 
 function flashPlaceMarker(placeId) {
@@ -1549,6 +1566,7 @@ function fitAllVisible() {
 function renderDetail(place) {
   const targets = [detailCard, sheetDetail].filter(Boolean);
   targets.forEach((target) => {
+    window.PlaceGallery?.unmount(target);
     if (!place) {
       target.classList.remove("visible");
       target.setAttribute("aria-hidden", "true");
@@ -1596,11 +1614,9 @@ function renderDetail(place) {
     target.querySelectorAll("[data-navigate-place]").forEach((button) => {
       button.addEventListener("click", () => navigateToPlace(place));
     });
-    target.querySelectorAll("[data-photo-open]").forEach((button) => {
-      button.addEventListener("click", () => openPhoto(button.dataset.photoOpen));
-    });
-    target.querySelectorAll(".place-photo img").forEach((image) => {
-      image.addEventListener("error", () => image.closest(".place-photo")?.classList.add("photo-failed"), { once: true });
+    window.PlaceGallery?.mount(target, place, {
+      onOpen: openPhoto,
+      isViewerOpen: () => photoViewer.classList.contains("open")
     });
   });
 }
@@ -1630,6 +1646,7 @@ function detailHtml(place) {
         </button>
       </header>
       <div class="place-detail-content">
+        ${placePhotoHtml(place)}
         ${scene ? sceneDetailHtml(scene, place) : placeWithoutSceneHtml(place)}
         ${scenes.length > 1 ? sceneSwitcherHtml(scenes) : ""}
         <div class="walk-actions">
@@ -1639,7 +1656,6 @@ function detailHtml(place) {
           </button>
           ${routeAdded ? `<button type="button" class="view-walk" data-open-walk>查看我的漫游</button>` : ""}
         </div>
-        ${placePhotoHtml(place)}
         ${literaryFoodHtml(scene, place)}
         <p class="detail-search">${escapeHtml(place.searchLabel || place.name)}</p>
         <div class="detail-actions">
@@ -1673,37 +1689,17 @@ function sceneDetailHtml(scene, place) {
 }
 
 function placePhotoHtml(place) {
-  const photo = photosForPlace(place)[0];
-  if (!photo) return "";
-  return `
-    <figure class="place-photo">
-      <button type="button" data-photo-open="${escapeAttr(photo.id)}" aria-label="查看${escapeAttr(place.name)}的照片">
-        <img src="${escapeAttr(photo.thumbnailUrl || photo.url)}" alt="${escapeAttr(photo.alt)}" loading="lazy" />
-      </button>
-      <figcaption>
-        <span>${escapeHtml(photo.caption || "")}</span>
-        <a href="${escapeAttr(photo.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(photo.sourceName)} · ${escapeHtml(photo.photographer || "")}${photo.license ? ` · ${escapeHtml(photo.license)}` : ""}</a>
-      </figcaption>
-    </figure>
-  `;
-}
-
-function photosForPlace(place) {
-  const photos = (window.LITERARY_PLACE_MEDIA && window.LITERARY_PLACE_MEDIA.photos) || [];
-  return photos.filter((photo) => {
-    const rawMatch = Array.isArray(photo.rawIds) && photo.rawIds.some((id) => place.rawIds.includes(id));
-    const searchMatch = photo.matchSearch && String(place.searchLabel || "").includes(photo.matchSearch);
-    return rawMatch || searchMatch;
-  });
+  return window.PlaceGallery?.html(place) || "";
 }
 
 function openPhoto(photoId) {
   const photos = (window.LITERARY_PLACE_MEDIA && window.LITERARY_PLACE_MEDIA.photos) || [];
-  const photo = photos.find((item) => item.id === photoId);
+  const photo = window.PlaceGallery?.photoById(photoId) || photos.find((item) => item.id === photoId);
   if (!photo || !photoViewer || !photoViewerImage || !photoViewerCaption) return;
   photoViewerImage.src = photo.url;
   photoViewerImage.alt = photo.alt;
-  photoViewerCaption.innerHTML = `${escapeHtml(photo.caption || "")} <a href="${escapeAttr(photo.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(photo.sourceName)} · ${escapeHtml(photo.photographer || "")} · ${escapeHtml(photo.license || "")}</a>`;
+  photoViewerCaption.hidden = photo.type === "generated";
+  photoViewerCaption.innerHTML = photo.type === "generated" ? "" : `${escapeHtml(photo.caption || "")} ${escapeHtml(photo.referenceNote || "")} <a href="${escapeAttr(photo.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(photo.sourceName)} · ${escapeHtml(photo.photographer || "")} · ${escapeHtml(photo.license || "")}</a>`;
   setPhotoViewerOpen(true);
 }
 
